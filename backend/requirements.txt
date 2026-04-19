@@ -1,4 +1,5 @@
 pynput
+gunicorn
 numpy
 pandas
 scipy
