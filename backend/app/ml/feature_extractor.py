@@ -21,6 +21,7 @@ Feature Breakdown (23 raw features):
 
 import math
 import time
+import bisect
 from datetime import datetime
 from typing import List, Tuple
 
@@ -271,6 +272,39 @@ def extract_mouse_features(mouse_events: List[MouseEvent]) -> dict:
     }
 
 
+def extract_mouse_reentry_features(
+    mouse_events: List[MouseEvent], context_events: List[ContextEvent]
+) -> dict:
+    """
+    Extract privacy-safe mouse re-entry proxies:
+    - mouse_reentry_count: number of mouse re-entry events after idle/context switches
+    - mouse_reentry_latency_ms: mean latency from app switch to next mouse activity
+    """
+    if not mouse_events:
+        return {"mouse_reentry_count": 0.0, "mouse_reentry_latency_ms": 0.0}
+
+    reentry_count = 0
+    for e in mouse_events:
+        if getattr(e, "reentry_after_idle", False) or getattr(
+            e, "reentry_after_context_switch", False
+        ):
+            reentry_count += 1
+
+    latencies = []
+    if context_events:
+        context_times = sorted(e.timestamp for e in context_events)
+        mouse_times = sorted(e.timestamp for e in mouse_events)
+        for ctx_ts in context_times:
+            j = bisect.bisect_right(mouse_times, ctx_ts)
+            if j < len(mouse_times):
+                latencies.append(max(mouse_times[j] - ctx_ts, 0.0))
+
+    return {
+        "mouse_reentry_count": float(reentry_count),
+        "mouse_reentry_latency_ms": float(np.mean(latencies)) if latencies else 0.0,
+    }
+
+
 # ═══════════════════════════════════════════════════════════════
 # 3. CONTEXT-SWITCH FEATURES (3 features)
 # ═══════════════════════════════════════════════════════════════
@@ -382,6 +416,28 @@ def extract_all_features(
             values.append(0.0)
 
     return np.array(values, dtype=np.float32), FEATURE_NAMES
+
+
+def extract_feature_dict(
+    key_events: List[KeyEvent],
+    mouse_events: List[MouseEvent],
+    context_events: List[ContextEvent],
+    window_start_time_ms: float,
+    session_start_time_ms: float | None = None,
+) -> dict:
+    """
+    Extract standard model features + extended explainability features.
+    """
+    features_arr, names = extract_all_features(
+        key_events=key_events,
+        mouse_events=mouse_events,
+        context_events=context_events,
+        window_start_time_ms=window_start_time_ms,
+        session_start_time_ms=session_start_time_ms,
+    )
+    base = {name: float(val) for name, val in zip(names, features_arr)}
+    base.update(extract_mouse_reentry_features(mouse_events, context_events))
+    return base
 
 
 # ═══════════════════════════════════════════════════════════════

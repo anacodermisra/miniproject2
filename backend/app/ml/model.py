@@ -232,6 +232,14 @@ class PersonalBaseline:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value REAL
+                )
+                """
+            )
             conn.commit()
         finally:
             conn.close()
@@ -367,6 +375,132 @@ class PersonalBaseline:
         finally:
             conn.close()
 
+    def get_calibration_status(
+        self, target_samples_per_hour: int = 20, min_hours_covered: int = 4
+    ) -> dict:
+        conn = self._connect()
+        c = conn.cursor()
+        try:
+            rows = c.execute(
+                "SELECT hour, MIN(sample_count) FROM baselines GROUP BY hour"
+            ).fetchall()
+            session_days = c.execute(
+                "SELECT COUNT(DISTINCT date(timestamp_ms/1000, 'unixepoch')) FROM session_history"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        samples_per_hour = {int(hour): int(count or 0) for hour, count in rows}
+        hours_covered = len(samples_per_hour)
+        if samples_per_hour:
+            avg_hour_completion = np.mean(
+                [
+                    min(float(v) / float(max(target_samples_per_hour, 1)), 1.0)
+                    for v in samples_per_hour.values()
+                ]
+            )
+        else:
+            avg_hour_completion = 0.0
+
+        hour_coverage_completion = min(hours_covered / 24.0, 1.0)
+        completion_pct = round(
+            (0.6 * avg_hour_completion + 0.4 * hour_coverage_completion) * 100.0, 1
+        )
+
+        min_samples = min(samples_per_hour.values()) if samples_per_hour else 0
+        is_calibrated = hours_covered >= int(min_hours_covered) and min_samples >= max(
+            5, int(target_samples_per_hour * 0.25)
+        )
+
+        return {
+            "is_calibrated": bool(is_calibrated),
+            "days_collected": int(session_days[0]) if session_days else 0,
+            "samples_per_hour": samples_per_hour,
+            "completion_pct": completion_pct,
+            "calibration_quality": round(completion_pct / 100.0, 3),
+        }
+
+    def get_settings(self) -> dict:
+        conn = self._connect()
+        try:
+            rows = conn.execute("SELECT key, value FROM settings").fetchall()
+            settings = {row[0]: row[1] for row in rows}
+            # Default values
+            if "mild_threshold" not in settings:
+                settings["mild_threshold"] = 55.0
+            if "high_threshold" not in settings:
+                settings["high_threshold"] = 75.0
+            return settings
+        finally:
+            conn.close()
+
+    def update_settings(self, mild: Optional[float] = None, high: Optional[float] = None):
+        conn = self._connect()
+        try:
+            if mild is not None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    ("mild_threshold", float(mild)),
+                )
+            if high is not None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    ("high_threshold", float(high)),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_feedback_bias(self) -> float:
+        """
+        Calculates a bias offset based on recent user feedback.
+        If user often says 'Actually Calm' (NEUTRAL) when model says 'STRESSED',
+        this returns a negative value to lower the score.
+        """
+        conn = self._connect()
+        try:
+            # Look at last 5 feedback events
+            rows = conn.execute(
+                """
+                SELECT model_label, user_feedback, score 
+                FROM feedback_events 
+                ORDER BY timestamp_ms DESC 
+                LIMIT 5
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return 0.0
+
+        offsets = []
+        for model_label, user_feedback, score in rows:
+            # Basic mapping: NEUTRAL=25, MILD=55, STRESSED=85
+            level_map = {"NEUTRAL": 25, "MILD": 55, "STRESSED": 85}
+            target = level_map.get(user_feedback, 50)
+            
+            # If the score was saved as 0.0, we use the model_label as proxy
+            current = score if score > 0 else level_map.get(model_label, 50)
+            
+            # The bias needed to get from 'current' to 'target'
+            offsets.append(target - current)
+
+        # Average the offsets, weighted toward most recent (already sorted desc)
+        weights = [1.0, 0.8, 0.6, 0.4, 0.2][:len(offsets)]
+        weighted_sum = sum(o * w for o, w in zip(offsets, weights))
+        return float(weighted_sum / sum(weights))
+
+    def reset(self):
+        conn = self._connect()
+        try:
+            conn.execute("DELETE FROM baselines")
+            conn.execute("DELETE FROM session_history")
+            conn.execute("DELETE FROM feedback_events")
+            conn.commit()
+        finally:
+            conn.close()
+
 
 # ────────────────────────────────────────────────────────────────
 # 3. Data Loading for Real CSV Training
@@ -412,10 +546,8 @@ def _load_real_dataset_from_csv(
     valid = np.isin(y, [0, 1, 2])
     X, y = X[valid], y[valid]
 
-    if len(X) < 100:
-        raise ValueError(
-            "Not enough valid rows in real dataset after filtering (<100)."
-        )
+    if len(X) < 10:
+        raise ValueError("Not enough valid rows in real dataset after filtering (<10).")
 
     return X, y
 
@@ -429,18 +561,20 @@ def _build_xgb_classifier() -> xgb.XGBClassifier:
     return xgb.XGBClassifier(
         objective="multi:softprob",
         num_class=3,
-        max_depth=6,
-        learning_rate=0.08,
-        n_estimators=350,
-        subsample=0.9,
-        colsample_bytree=0.9,
-        min_child_weight=3,
-        gamma=0.05,
-        reg_alpha=0.01,
-        reg_lambda=1.0,
+        max_depth=5,
+        learning_rate=0.05,
+        n_estimators=500,
+        subsample=0.85,
+        colsample_bytree=0.85,
+        min_child_weight=5,
+        gamma=0.1,
+        reg_alpha=0.05,
+        reg_lambda=1.5,
+        scale_pos_weight=1.0,
         eval_metric="mlogloss",
         random_state=42,
         tree_method="hist",
+        early_stopping_rounds=30,
     )
 
 

@@ -39,6 +39,16 @@ FEATURE_NAMES = [
 STRESS_SCORE_THRESHOLD_MILD = 40
 STRESS_SCORE_THRESHOLD_HIGH = 70
 
+# Hybrid scoring config
+MODEL_SCORE_WEIGHT = 0.7
+
+# Calibration targets
+CALIBRATION_TARGET_SAMPLES_PER_HOUR = 20
+CALIBRATION_MIN_HOURS_COVERED = 4
+
+# WebSocket reliability
+WS_HEARTBEAT_TIMEOUT_SEC = 30.0
+
 # Realistic performance expectations (from research)
 EXPECTED_PERFORMANCE = {
     "universal_model": {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from "recharts";
-import type { HistoryPoint } from "@/hooks/use-websocket";
+import type { HistoryPoint } from "@/lib/types";
 
 interface TimelineChartProps {
   data: HistoryPoint[];

@@ -1,0 +1,37 @@
+--- MindPulse Model Auditor ---
+[1/4] Loading production model artifacts...
+[2/4] Generating 1,000 fresh behavioral samples (Blind Test)...
+[3/4] Performing live inference on test set...
+[4/4] Calculating real-world performance metrics...
+
+====================================================
+VALIDATION ACCURACY: 99.80%
+PRECISION (MACRO):   99.78%
+RECALL (MACRO):      99.67%
+F1-SCORE (MACRO):    99.72%
+====================================================
+
+[ROC AUC per Class]
+- NEUTRAL:   1.0000
+- MILD:      0.9999
+- STRESSED:  0.9999
+
+[Detailed Classification Report]
+              precision    recall  f1-score   support
+
+     NEUTRAL       1.00      1.00      1.00       500
+        MILD       0.99      1.00      1.00       300
+    STRESSED       1.00      0.99      0.99       200
+
+    accuracy                           1.00      1000
+   macro avg       1.00      1.00      1.00      1000
+weighted avg       1.00      1.00      1.00      1000
+
+
+[Confusion Matrix]
+                 Pred NEUTRAL  Pred MILD  Pred STRESSED
+Actual NEUTRAL            500          0              0
+Actual MILD                 0        300              0
+Actual STRESSED             0          2            198
+
+--- Evaluation Complete ---

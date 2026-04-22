@@ -1,0 +1,15 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='900' height='320'>
+  <rect width='900' height='320' fill='#151824'/>
+  <text x='24' y='44' fill='#ffffff' font-size='28' font-family='Arial'>MindPulse Input State</text>
+  <rect x='24' y='70' width='850' height='70' rx='10' fill='#1f2435' stroke='#2ecc71'/>
+  <text x='40' y='112' fill='#b5bfd6' font-size='18' font-family='Arial'>Alert: NORMAL · Score 33 · Confidence 0.81 · Trend steady</text>
+  <rect x='24' y='158' width='270' height='130' rx='10' fill='#1f2435' stroke='#3a3f57'/>
+  <rect x='314' y='158' width='270' height='130' rx='10' fill='#1f2435' stroke='#3a3f57'/>
+  <rect x='604' y='158' width='270' height='130' rx='10' fill='#1f2435' stroke='#3a3f57'/>
+  <text x='44' y='195' fill='#9bb0d1' font-size='16' font-family='Arial'>Typing speed: 55 WPM</text>
+  <text x='44' y='225' fill='#9bb0d1' font-size='16' font-family='Arial'>Error rate: 3.2%</text>
+  <text x='334' y='195' fill='#9bb0d1' font-size='16' font-family='Arial'>Rage clicks: 0</text>
+  <text x='334' y='225' fill='#9bb0d1' font-size='16' font-family='Arial'>Switch entropy: low</text>
+  <text x='624' y='195' fill='#9bb0d1' font-size='16' font-family='Arial'>Recommendation</text>
+  <text x='624' y='225' fill='#2ecc71' font-size='16' font-family='Arial'>Preventive eye break every 30–40 min</text>
+</svg>

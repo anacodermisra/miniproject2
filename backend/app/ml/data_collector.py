@@ -49,6 +49,8 @@ class MouseEvent:
     event_type: str  # 'move' | 'click' | 'scroll'
     click_type: Optional[str] = None
     scroll_delta: Optional[int] = None
+    reentry_after_idle: bool = False
+    reentry_after_context_switch: bool = False
 
 
 @dataclass
@@ -118,6 +120,10 @@ class BehavioralCollector:
         self._mouse_sample_counter: int = 0
         self._mouse_move_downsample = max(1, int(mouse_move_downsample))
         self._max_key_hold_ms = float(max_key_hold_ms)
+        self._mouse_idle_reentry_ms = 3000.0
+        self._last_mouse_event_ts: Optional[float] = None
+        self._last_context_switch_ts: Optional[float] = None
+        self._pending_context_mouse_reentry = False
 
         self._kb_listener = None
         self._mouse_listener = None
@@ -224,16 +230,20 @@ class BehavioralCollector:
     # ────────────────────────────────────────────────────────────
 
     def _on_mouse_move(self, x: int, y: int):
+        ts = time.time() * 1000.0
+        is_idle_reentry, is_ctx_reentry = self._consume_mouse_reentry_flags(ts)
         with self._lock:
             self._mouse_sample_counter += 1
             if self._mouse_sample_counter % self._mouse_move_downsample != 0:
                 return
             self.mouse_buffer.append(
                 MouseEvent(
-                    timestamp=time.time() * 1000.0,
+                    timestamp=ts,
                     x=int(x),
                     y=int(y),
                     event_type="move",
+                    reentry_after_idle=is_idle_reentry,
+                    reentry_after_context_switch=is_ctx_reentry,
                 )
             )
 
@@ -241,28 +251,36 @@ class BehavioralCollector:
         if not pressed:
             return
 
+        ts = time.time() * 1000.0
+        is_idle_reentry, is_ctx_reentry = self._consume_mouse_reentry_flags(ts)
         click_type = str(button).split(".")[-1] if button is not None else "unknown"
         with self._lock:
             self.mouse_buffer.append(
                 MouseEvent(
-                    timestamp=time.time() * 1000.0,
+                    timestamp=ts,
                     x=int(x),
                     y=int(y),
                     event_type="click",
                     click_type=click_type,
+                    reentry_after_idle=is_idle_reentry,
+                    reentry_after_context_switch=is_ctx_reentry,
                 )
             )
         self._check_context_switch()
 
     def _on_mouse_scroll(self, x: int, y: int, dx: int, dy: int):
+        ts = time.time() * 1000.0
+        is_idle_reentry, is_ctx_reentry = self._consume_mouse_reentry_flags(ts)
         with self._lock:
             self.mouse_buffer.append(
                 MouseEvent(
-                    timestamp=time.time() * 1000.0,
+                    timestamp=ts,
                     x=int(x),
                     y=int(y),
                     event_type="scroll",
                     scroll_delta=int(dy),
+                    reentry_after_idle=is_idle_reentry,
+                    reentry_after_context_switch=is_ctx_reentry,
                 )
             )
 
@@ -277,6 +295,8 @@ class BehavioralCollector:
 
         with self._lock:
             if current != self._last_context:
+                self._last_context_switch_ts = time.time() * 1000.0
+                self._pending_context_mouse_reentry = True
                 self.context_buffer.append(
                     ContextEvent(
                         timestamp=time.time() * 1000.0,
@@ -285,6 +305,22 @@ class BehavioralCollector:
                     )
                 )
                 self._last_context = current
+
+    def _consume_mouse_reentry_flags(self, ts: float) -> Tuple[bool, bool]:
+        """
+        Return and clear current mouse re-entry flags as:
+        (reentry_after_idle, reentry_after_context_switch).
+        """
+        with self._lock:
+            idle_reentry = False
+            if self._last_mouse_event_ts is not None:
+                idle_reentry = (ts - self._last_mouse_event_ts) >= self._mouse_idle_reentry_ms
+
+            ctx_reentry = bool(self._pending_context_mouse_reentry)
+            self._pending_context_mouse_reentry = False
+            self._last_mouse_event_ts = ts
+
+        return idle_reentry, ctx_reentry
 
     # ────────────────────────────────────────────────────────────
     # Cleanup loop (stale pending presses)

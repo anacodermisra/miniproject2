@@ -1,0 +1,158 @@
+python : SHAP computation 
+failed: only length-1 
+arrays can be converted 
+to Python scalars
+At line:1 char:1
++ python tests/test_tempor
+al_stability.py > 
+stability_results.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (S  
+  HAP computatio... Pyt   
+ hon scalars:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+SHAP computation failed: 
+only length-1 arrays can 
+be converted to Python 
+scalars
+--- Temporal Stability Test ---
+
+[PHASE 1] Neutral Baseline (5 frames)
+Frame 1: Score=88.5 | Level=STRESSED
+Frame 2: Score=88.5 | Level=STRESSED
+Frame 3: Score=88.5 | Level=STRESSED
+Frame 4: Score=88.5 | Level=STRESSED
+Frame 5: Score=88.5 | Level=STRESSED
+
+[PHASE 2] Sudden Stress Event (High Signal) (5 frames)
+Frame 1: Score=87.9 | Level=STRESSED
+Frame 2: Score=87.4 | Level=STRESSED
+Frame 3: Score=87.0 | Level=STRESSED
+Frame 4: Score=86.7 | Level=STRESSED
+Frame 5: Score=86.4 | Level=STRESSED
+
+[PHASE 3] Immediate Idle (Recovery) (5 frames)
+Frame 1: Score=60.5 | Level=MILD
+Frame 2: Score=42.3 | Level=MILD
+Frame 3: Score=29.6 | Level=NEUTRAL
+Frame 4: Score=20.7 | Level=NEUTRAL
+Frame 5: Score=14.5 | Level=NEUTRAL

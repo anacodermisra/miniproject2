@@ -1,0 +1,14 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='900' height='320'>
+  <rect width='900' height='320' fill='#111722'/>
+  <text x='24' y='44' fill='#ffffff' font-size='28' font-family='Arial'>MindPulse Action State</text>
+  <rect x='24' y='70' width='850' height='220' rx='10' fill='#1a2433' stroke='#6C5CE7'/>
+  <text x='44' y='106' fill='#ffffff' font-size='20' font-family='Arial'>Active Intervention Panel</text>
+  <text x='44' y='136' fill='#c7d0e3' font-size='16' font-family='Arial'>Timer: 01:32 remaining</text>
+  <text x='44' y='164' fill='#c7d0e3' font-size='16' font-family='Arial'>• Inhale 4s, hold 4s, exhale 4s, hold 4s</text>
+  <text x='44' y='190' fill='#c7d0e3' font-size='16' font-family='Arial'>• Repeat 4 cycles</text>
+  <text x='44' y='216' fill='#c7d0e3' font-size='16' font-family='Arial'>• Relax shoulders and jaw</text>
+  <rect x='44' y='236' width='160' height='34' rx='8' fill='#2ecc71'/>
+  <text x='68' y='259' fill='#0b2d1d' font-size='14' font-family='Arial'>This helped</text>
+  <rect x='220' y='236' width='160' height='34' rx='8' fill='#e74c3c'/>
+  <text x='244' y='259' fill='#3b0909' font-size='14' font-family='Arial'>Didn't help</text>
+</svg>

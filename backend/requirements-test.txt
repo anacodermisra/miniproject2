@@ -1,0 +1,6 @@
+pytest>=7.0
+pytest-asyncio>=0.21
+pytest-cov>=4.0
+httpx>=0.24
+factory-boy>=3.3
+faker>=19.0

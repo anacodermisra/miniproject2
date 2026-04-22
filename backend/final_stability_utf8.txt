@@ -1,0 +1,22 @@
+--- Temporal Stability Test ---
+
+[PHASE 1] Neutral Baseline (5 frames)
+Frame 1: Score=11.5 | Level=NEUTRAL
+Frame 2: Score=11.5 | Level=NEUTRAL
+Frame 3: Score=11.5 | Level=NEUTRAL
+Frame 4: Score=11.5 | Level=NEUTRAL
+Frame 5: Score=11.5 | Level=NEUTRAL
+
+[PHASE 2] Sudden Stress Event (High Signal) (5 frames)
+Frame 1: Score=13.5 | Level=NEUTRAL
+Frame 2: Score=15.1 | Level=NEUTRAL
+Frame 3: Score=16.4 | Level=NEUTRAL
+Frame 4: Score=17.4 | Level=NEUTRAL
+Frame 5: Score=18.2 | Level=NEUTRAL
+
+[PHASE 3] Immediate Idle (Recovery) (5 frames)
+Frame 1: Score=12.8 | Level=NEUTRAL
+Frame 2: Score=8.9 | Level=NEUTRAL
+Frame 3: Score=6.2 | Level=NEUTRAL
+Frame 4: Score=4.4 | Level=NEUTRAL
+Frame 5: Score=3.1 | Level=NEUTRAL

@@ -1,0 +1,28 @@
+{
+  "notifications": {
+    "enabled": true,
+    "mild_enabled": true,
+    "stressed_enabled": true,
+    "mild_threshold": 45,
+    "stressed_threshold": 75,
+    "mild_cooldown_seconds": 120,
+    "stressed_cooldown_seconds": 60,
+    "sound_enabled": true,
+    "popup_enabled": true
+  },
+  "focus": {
+    "focus_categories": [
+      "code",
+      "docs",
+      "terminal",
+      "design"
+    ],
+    "custom_focus_apps": []
+  },
+  "_detected_apps": [
+    "Antigravity",
+    "WhatsApp.Root",
+    "chrome",
+    "explorer"
+  ]
+}

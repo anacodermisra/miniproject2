@@ -291,6 +291,9 @@ def process_user(user_dir: str, user_id: str) -> pd.DataFrame:
     print(f"  Labels:     {len(labels)}")
 
     # Create sliding windows
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app", "ml"))
     from feature_extractor import create_sliding_windows
 
     windows = create_sliding_windows(
