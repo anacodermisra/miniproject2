@@ -16,6 +16,18 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(
     os.getenv("JWT_ACCESS_TOKEN_EXPIRE", 10080)
 )  # 7 days default
 
+# Monkeypatch bcrypt to support passlib's detect_wrap_bug check on newer bcrypt versions
+# This fixes the "ValueError: password cannot be longer than 72 bytes"
+import bcrypt
+_orig_hashpw = bcrypt.hashpw
+def _patched_hashpw(password, salt):
+    if isinstance(password, str):
+        password = password.encode("utf-8")
+    if len(password) > 72:
+        password = password[:72]
+    return _orig_hashpw(password, salt)
+bcrypt.hashpw = _patched_hashpw
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 

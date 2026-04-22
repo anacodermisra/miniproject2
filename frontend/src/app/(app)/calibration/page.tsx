@@ -11,7 +11,7 @@ export default function CalibrationPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.calibration(userId).then((s) => {
+    api.calibration().then((s) => {
       setStatus(s);
       setLoading(false);
     }).catch(() => setLoading(false));

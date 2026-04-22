@@ -43,12 +43,13 @@ export function useStressStream(): UseStressStreamReturn {
     if (typeof window === "undefined") return;
     
     const url = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:5000/api/v1/ws/stress";
+    const token = localStorage.getItem("mp_token");
     
     try {
       setStatus("connecting");
       setError(null);
       
-      const ws = new WebSocket(url);
+      const ws = new WebSocket(`${url}${token ? `?token=${token}` : ""}`);
       
       ws.onopen = () => {
         if (!isMounted.current) return;

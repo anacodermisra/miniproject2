@@ -30,25 +30,23 @@ export default function HistoryPage() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [interventions, setInterventions] = useState<InterventionEvent[]>([]);
   const [hours, setHours] = useState(24);
-  const [customUserId, setCustomUserId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const activeUserId = customUserId || userId;
     Promise.all([
-      api.history(activeUserId, hours).catch(() => { setError("Couldn't read rhythm — check the username?"); return []; }),
-      api.stats(activeUserId).catch(() => null),
-      api.interventionHistory(activeUserId, Math.max(24, hours)).catch(() => []),
+      api.history(hours).catch(() => { setError("Couldn't read rhythm — token expired?"); return []; }),
+      api.stats().catch(() => null),
+      api.interventionHistory(Math.max(24, hours)).catch(() => []),
     ]).then(([h, s, i]) => {
       setHistory(h);
       setStats(s);
       setInterventions(i);
       setLoading(false);
     });
-  }, [hours, userId, customUserId]);
+  }, [hours, userId]);
 
   // Real-time integration
   const { data: wsData } = useStressStream();
@@ -152,27 +150,7 @@ export default function HistoryPage() {
           <p className="text-sm text-[#857F75] mt-1.5">Your stress patterns over time</p>
         </div>
         
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] uppercase font-bold text-[#857F75]/60 px-1 tracking-widest">Override Patient ID</label>
-          <div className="flex bg-[#141420] border border-[#1c1c2e] rounded-lg overflow-hidden focus-within:border-[#5b4fc4]/50 transition-colors">
-            <input 
-              type="text" 
-              placeholder={userId || "Enter username..."}
-              className="bg-transparent text-xs px-4 py-2 border-none outline-none text-[#F2EFE9] w-48 placeholder:text-[#857F75]/30"
-              value={customUserId}
-              onChange={(e) => setCustomUserId(e.target.value)}
-            />
-            {customUserId && (
-              <button 
-                onClick={() => setCustomUserId("")}
-                className="px-3 text-[#dc2626] hover:bg-[#dc2626]/10 transition-colors"
-                title="Reset to your profile"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        </div>
+        
       </div>
 
       {error && (

@@ -285,7 +285,7 @@ export default function InsightsPage() {
     const fetchInsights = async () => {
       try {
         // Fetch history for pattern analysis
-        const history = await api.history(userId, 168); // 7 days
+        const history = await api.history(168); // 7 days
 
         // Calculate hourly energy patterns
         const hourMap = new Map<number, number[]>();
@@ -324,7 +324,7 @@ export default function InsightsPage() {
         setDayOfWeekData(dayOfWeek);
 
         // Fetch intervention history for break effectiveness
-        const interventions = await api.interventionHistory(userId, 168).catch(() => []);
+        const interventions = await api.interventionHistory(168).catch(() => []);
 
         const breakTypeMap: Record<string, string> = {
           breathing_reset: "Breathing",

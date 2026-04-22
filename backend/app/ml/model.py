@@ -232,6 +232,14 @@ class PersonalBaseline:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value REAL
+                )
+                """
+            )
             conn.commit()
         finally:
             conn.close()
@@ -411,6 +419,37 @@ class PersonalBaseline:
             "completion_pct": completion_pct,
             "calibration_quality": round(completion_pct / 100.0, 3),
         }
+
+    def get_settings(self) -> dict:
+        conn = self._connect()
+        try:
+            rows = conn.execute("SELECT key, value FROM settings").fetchall()
+            settings = {row[0]: row[1] for row in rows}
+            # Default values
+            if "mild_threshold" not in settings:
+                settings["mild_threshold"] = 55.0
+            if "high_threshold" not in settings:
+                settings["high_threshold"] = 75.0
+            return settings
+        finally:
+            conn.close()
+
+    def update_settings(self, mild: Optional[float] = None, high: Optional[float] = None):
+        conn = self._connect()
+        try:
+            if mild is not None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    ("mild_threshold", float(mild)),
+                )
+            if high is not None:
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    ("high_threshold", float(high)),
+                )
+            conn.commit()
+        finally:
+            conn.close()
 
     def get_feedback_bias(self) -> float:
         """

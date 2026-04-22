@@ -1,6 +1,7 @@
 """MindPulse Backend — Auth API Routes."""
 
 from __future__ import annotations
+import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
@@ -8,9 +9,9 @@ from typing import Optional
 
 from app.services import users
 from app.core.auth import decode_access_token
+from app.api.deps import get_current_user
 
 router = APIRouter()
-bearer_scheme = HTTPBearer()
 
 
 class SignupRequest(BaseModel):
@@ -57,14 +58,5 @@ async def login(req: LoginRequest):
 
 
 @router.get("/auth/me")
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-):
-    payload = decode_access_token(credentials.credentials)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    user_id = int(payload.get("sub", 0))
-    user = users.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+async def read_users_me(current_user: dict = Depends(get_current_user)):
+    return current_user

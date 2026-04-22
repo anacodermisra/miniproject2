@@ -47,7 +47,6 @@ export const api = {
       { method: "POST", body: JSON.stringify({ email_or_username: emailOrUsername, password }) }
     ),
   me: () => request<{ id: number; email: string; username: string; display_name: string; created_at: string; last_login: string }>("/auth/me"),
-
   // Core
   health: () => request<HealthStatus>("/health"),
   inference: (features: FeatureVector, userId: string = "default") =>
@@ -55,27 +54,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ features, user_id: userId }),
     }),
-  history: (userId: string = "default", hours: number = 24) =>
-    request<HistoryPoint[]>(`/history?user_id=${userId}&hours=${hours}`),
-  stats: (userId: string = "default") =>
-    request<UserStats>(`/stats?user_id=${userId}`),
-  calibration: (userId: string = "default") =>
-    request<CalibrationStatus>(`/calibration/${userId}`),
-  feedback: (predicted: string, actual: string, userId: string = "default", score: number = 0) =>
+  history: (hours: number = 24) =>
+    request<HistoryPoint[]>(`/history?hours=${hours}`),
+  stats: () =>
+    request<UserStats>(`/stats`),
+  calibration: () =>
+    request<CalibrationStatus>("/calibration"),
+  feedback: (predicted: string, actual: string, score: number = 0) =>
     request("/feedback", {
       method: "POST",
       body: JSON.stringify({
-        user_id: userId,
         predicted_level: predicted,
         actual_level: actual,
         timestamp: Date.now(),
         score,
       }),
     }),
-  reset: (userId: string = "demo_user") =>
+  reset: () =>
     request("/reset", {
       method: "POST",
-      body: JSON.stringify({ user_id: userId }),
     }),
   modelMetrics: () =>
     request<{
@@ -86,67 +83,65 @@ export const api = {
       confusion_matrix: number[][];
       labels: string[];
     }>("/model-metrics"),
-  interventionRecommendation: (userId: string = "default") =>
-    request<InterventionSnapshot>(`/interventions/recommendation?user_id=${userId}`),
+  interventionRecommendation: () =>
+    request<InterventionSnapshot>(`/interventions/recommendation`),
   interventionAction: (
     action: "start_break" | "snooze" | "im_okay" | "need_stronger_help" | "helped" | "not_helped" | "skipped",
-    userId: string = "default",
     interventionType?: string,
     notes: string = "",
   ) =>
     request("/interventions/action", {
       method: "POST",
       body: JSON.stringify({
-        user_id: userId,
         action,
         intervention_type: interventionType,
         notes,
       }),
     }),
-  interventionHistory: (userId: string = "default", hours: number = 168) =>
-    request<InterventionEvent[]>(`/interventions/history?user_id=${userId}&hours=${hours}`),
-  checkWindDown: (userId: string = "default") =>
+  interventionHistory: (hours: number = 168) =>
+    request<InterventionEvent[]>(`/interventions/history?hours=${hours}`),
+  checkWindDown: () =>
     request<{ wind_down: { type: string; title: string; message: string; severity: string; actions: { label: string; action: string }[] } | null }>(
-      `/interventions/wind-down?user_id=${userId}`
+      `/interventions/wind-down`
     ),
-  scheduleBreak: (userId: string = "default", breakTime: string, interventionType: string = "breathing_reset") =>
+  scheduleBreak: (breakTime: string, interventionType: string = "breathing_reset") =>
     request<{ status: string; break: { id: string; scheduled_for: string; intervention_type: string; status: string } }>(
-      `/interventions/schedule-break?user_id=${userId}&break_time=${encodeURIComponent(breakTime)}&intervention_type=${interventionType}`,
+      `/interventions/schedule-break?break_time=${encodeURIComponent(breakTime)}&intervention_type=${interventionType}`,
       { method: "POST" }
     ),
-  getScheduledBreaks: (userId: string = "default") =>
+  getScheduledBreaks: () =>
     request<{ breaks: { id: string; scheduled_for: string; intervention_type: string; status: string; created_at: string }[] }>(
-      `/interventions/scheduled-breaks?user_id=${userId}`
+      `/interventions/scheduled-breaks`
     ),
-  cancelBreak: (userId: string = "default", breakId: string) =>
+  cancelBreak: (breakId: string) =>
     request<{ status: string; message: string }>(
-      `/interventions/cancel-break?user_id=${userId}&break_id=${breakId}`,
+      `/interventions/cancel-break?break_id=${breakId}`,
       { method: "POST" }
     ),
-  checkDueBreaks: (userId: string = "default") =>
+  checkDueBreaks: () =>
     request<{ due_break: { type: string; title: string; message: string; break_id: string; intervention_type: string } | null }>(
-      `/interventions/check-due-breaks?user_id=${userId}`
+      `/interventions/check-due-breaks`
     ),
-
   // Wellness
-  saveWellnessCheckin: (userId: string = "default", energy: string, sleep: string, note?: string) =>
+  saveWellnessCheckin: (energy: string, sleep: string, note?: string) =>
     request("/wellness/checkin", {
       method: "POST",
-      body: JSON.stringify({ user_id: userId, energy, sleep, note }),
+      body: JSON.stringify({ energy, sleep, note }),
     }),
-  getWellnessHistory: (userId: string = "default", limit: number = 30) =>
+  getWellnessHistory: (limit: number = 30) =>
     request<{ timestamp: number; energy: string; sleep: string; note: string }[]>(
-      `/wellness/history?user_id=${userId}&limit=${limit}`
+      `/wellness/history?limit=${limit}`
     ),
-  saveJournalEntry: (userId: string = "default", content: string, entryType: string = "insight") =>
+  saveJournalEntry: (content: string, entryType: string = "insight") =>
     request("/journal/entry", {
       method: "POST",
-      body: JSON.stringify({ user_id: userId, content, entry_type: entryType }),
+      body: JSON.stringify({ content, entry_type: entryType }),
     }),
-  getJournalEntries: (userId: string = "default", limit: number = 50) =>
+  getJournalEntries: (limit: number = 50) =>
     request<{ id: string; timestamp: number; content: string; entry_type: string }[]>(
-      `/journal/entries?user_id=${userId}&limit=${limit}`
+      `/journal/entries?limit=${limit}`
     ),
+
 };
 
 export function setToken(token: string) {

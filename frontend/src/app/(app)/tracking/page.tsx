@@ -301,7 +301,7 @@ export default function TrackingPage() {
   }, []);
 
   useEffect(() => {
-    const fetchStats = () => api.stats(userId).then(setStats).catch(() => {});
+    const fetchStats = () => api.stats().then(setStats).catch(() => {});
     fetchStats();
     const interval = setInterval(fetchStats, 10000);
     return () => clearInterval(interval);
@@ -310,7 +310,7 @@ export default function TrackingPage() {
   useEffect(() => {
     const pollLatest = async () => {
       try {
-        const h = await api.history(userId, 0.1);
+        const h = await api.history(0.1);
         if (h.length > 0) {
           const latest = h[h.length - 1];
           setPolledData((prev) => {
@@ -348,7 +348,7 @@ export default function TrackingPage() {
 
   useEffect(() => {
     api
-      .interventionRecommendation(userId)
+      .interventionRecommendation()
       .then((res) => {
         setAlertState(res.alert_state);
         setIntervention(res.intervention);
@@ -398,7 +398,7 @@ export default function TrackingPage() {
     const checkWindDown = () => {
       if (windDownDismissed) return;
       api
-        .checkWindDown(userId)
+        .checkWindDown()
         .then((res) => {
           if (res.wind_down) {
             setWindDown(res.wind_down);
@@ -460,7 +460,7 @@ export default function TrackingPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={async () => {
-              await api.reset(userId);
+              await api.reset();
               setStats(null);
             }}
             className="px-4 py-2 rounded-lg border text-xs font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"
@@ -605,7 +605,6 @@ export default function TrackingPage() {
                 onClick={async () => {
                   await api.interventionAction(
                     "start_break",
-                    userId,
                     intervention.intervention_type,
                   );
                   setActiveIntervention(intervention.intervention_type);
@@ -623,7 +622,6 @@ export default function TrackingPage() {
                 onClick={async () => {
                   await api.interventionAction(
                     "snooze",
-                    userId,
                     intervention.intervention_type,
                   );
                   setActiveIntervention(null);
@@ -637,7 +635,6 @@ export default function TrackingPage() {
                 onClick={async () => {
                   await api.interventionAction(
                     "im_okay",
-                    userId,
                     intervention.intervention_type,
                   );
                   setActiveIntervention(null);
@@ -651,7 +648,6 @@ export default function TrackingPage() {
                 onClick={() =>
                   api.interventionAction(
                     "need_stronger_help",
-                    userId,
                     intervention.intervention_type,
                   )
                 }
@@ -667,7 +663,6 @@ export default function TrackingPage() {
                   onClick={async () => {
                     await api.interventionAction(
                       "helped",
-                      userId,
                       intervention.intervention_type,
                     );
                     setActiveIntervention(null);
@@ -681,7 +676,6 @@ export default function TrackingPage() {
                   onClick={async () => {
                     await api.interventionAction(
                       "not_helped",
-                      userId,
                       intervention.intervention_type,
                     );
                     setActiveIntervention(null);
@@ -695,7 +689,6 @@ export default function TrackingPage() {
                   onClick={async () => {
                     await api.interventionAction(
                       "skipped",
-                      userId,
                       intervention.intervention_type,
                     );
                     setActiveIntervention(null);
@@ -847,7 +840,7 @@ export default function TrackingPage() {
         <div className="flex gap-3">
           <button
             onClick={async () => {
-              await api.feedback(level, level, userId, score);
+              await api.feedback(level, level, score);
               toast.success("Thank you! Model updated.");
             }}
             className="flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"
@@ -857,7 +850,7 @@ export default function TrackingPage() {
           </button>
           <button
             onClick={async () => {
-              await api.feedback(level, "NEUTRAL", userId, score);
+              await api.feedback(level, "NEUTRAL", score);
               toast.success("Got it. We'll adjust your baseline.");
             }}
             className="flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"
@@ -867,7 +860,7 @@ export default function TrackingPage() {
           </button>
           <button
             onClick={async () => {
-              await api.feedback(level, "STRESSED", userId, score);
+              await api.feedback(level, "STRESSED", score);
               toast.success("Feedback received. Retuning detection thresholds.");
             }}
             className="flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"

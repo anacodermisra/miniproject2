@@ -169,3 +169,15 @@ class JournalEntryResponse(BaseModel):
     timestamp: float
     content: str
     entry_type: str
+
+
+class UserSettings(BaseModel):
+    user_id: str
+    mild_threshold: float = 55.0
+    high_threshold: float = 75.0
+
+
+class SettingsRequest(BaseModel):
+    user_id: str
+    mild_threshold: Optional[float] = None
+    high_threshold: Optional[float] = None

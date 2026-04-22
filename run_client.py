@@ -277,10 +277,17 @@ def run_monitor():
                         status_icon = "🟢" if level == "NEUTRAL" else "🟡" if level == "MILD" else "🔴"
                         print(f"{status_icon} [{level:9}] Score: {score:4.1f}% | App: {window_info['app_name'][:15]:15} | Focus: {summary['focus_pct']}%")
                         
-                        if level == "STRESSED" or score >= 80:
+                        # 4. Personalized Notifications
+                        # We use 55% as the default 'Mild' threshold as requested
+                        if score >= 80 or level == "STRESSED":
                             _send_notification(
-                                "MindPulse Stress Alert",
-                                f"Stress score is {score:.0f}%. Consider taking a 2-minute breathing reset."
+                                "MindPulse: High Stress Alert",
+                                f"Stress score is {score:.0f}%. High tension detected — consider a 2-minute reset."
+                            )
+                        elif score >= 55 or level == "MILD":
+                            _send_notification(
+                                "MindPulse: Mild Stress",
+                                f"Score: {score:.0f}%. Subtle stress patterns detected. Just a heads up!"
                             )
                 except Exception as e:
                     print(f"⚠️ API Error: {e}")

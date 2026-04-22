@@ -173,19 +173,29 @@ class InterventionEngine:
 
     def evaluate(self, user_id: str, result: dict) -> dict:
         state = self._user_state(user_id)
+        
+        # Load personalized thresholds (Default Mild: 55, High: 75)
+        # We fetch from PersonalBaseline via the inference engine
+        from app.services.inference import engine
+        baseline = engine._get_baseline(user_id)
+        thresholds = baseline.get_settings() if baseline else {}
+        
+        mild_thresh = thresholds.get("mild_threshold", 55.0)
+        high_thresh = thresholds.get("high_threshold", 75.0)
+
         now = time.time()
         score = float(result.get("score", 0.0))
         level = str(result.get("level", "UNKNOWN"))
         confidence = float(result.get("confidence", 0.0))
         trend = self._trend_label(user_id)
 
-        is_high_risk = level == "STRESSED" and confidence >= 0.65 and score >= 70
+        is_high_risk = level == "STRESSED" and confidence >= 0.65 and score >= high_thresh
         is_very_high = (
             level == "STRESSED"
             and score >= self.CRITICAL_SCORE_THRESHOLD
             and confidence >= self.CRITICAL_CONFIDENCE_THRESHOLD
         )
-        is_moderate_risk = score >= 55 or level == "MILD"
+        is_moderate_risk = score >= mild_thresh or level == "MILD"
         if is_high_risk:
             state.risk_streak += 1
         elif is_moderate_risk:

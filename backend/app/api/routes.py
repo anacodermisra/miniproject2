@@ -3,7 +3,8 @@
 from __future__ import annotations
 import time
 import asyncio
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends
+from app.api.deps import get_current_user
 from app.schemas.stress import (
     InferenceRequest,
     InferenceResponse,
@@ -18,6 +19,8 @@ from app.schemas.stress import (
     WellnessCheckinResponse,
     JournalEntryRequest,
     JournalEntryResponse,
+    UserSettings,
+    SettingsRequest,
 )
 from app.services.inference import engine
 from app.services.websocket_manager import manager
@@ -65,24 +68,25 @@ async def run_inference(req: InferenceRequest):
             score_before=float(result.get("score", 0.0)),
             notes="auto-generated recommendation",
         )
-    await manager.broadcast({"type": "stress_update", **result, "user_id": req.user_id})
+    await manager.send_personal_message({"type": "stress_update", **result, "user_id": req.user_id}, req.user_id)
     return InferenceResponse(**result)
 
 
 @router.get("/history", response_model=list[HistoryPoint])
-async def get_history(user_id: str = "default", hours: int = 24):
-    return history.get_history(user_id, hours)
+async def get_history(hours: int = 24, current_user: dict = Depends(get_current_user)):
+    return history.get_history(current_user["username"], hours)
 
 
 @router.get("/stats")
-async def get_stats(user_id: str = "default"):
-    return history.get_stats(user_id)
+async def get_stats(current_user: dict = Depends(get_current_user)):
+    return history.get_stats(current_user["username"])
 
 
 @router.post("/feedback")
-async def submit_feedback(req: FeedbackRequest):
+async def submit_feedback(req: FeedbackRequest, current_user: dict = Depends(get_current_user)):
     # Persist feedback to SQLite via PersonalBaseline
-    baseline = engine._get_baseline(req.user_id)
+    user_id = current_user["username"]
+    baseline = engine._get_baseline(user_id)
     if baseline:
         baseline.save_feedback(
             timestamp_ms=req.timestamp,
@@ -97,7 +101,8 @@ async def submit_feedback(req: FeedbackRequest):
 
 
 @router.get("/interventions/recommendation")
-async def get_recommendation(user_id: str = "default"):
+async def get_recommendation(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
     latest = history.latest_point(user_id)
     eval_result = intervention_engine.evaluate(
         user_id,
@@ -132,13 +137,15 @@ async def intervention_action(req: InterventionActionRequest):
 
 
 @router.get("/interventions/history", response_model=list[InterventionEvent])
-async def intervention_history(user_id: str = "default", hours: int = 168):
+async def intervention_history(hours: int = 168, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
     events = history.get_intervention_events(user_id, hours)
     return [InterventionEvent(**event) for event in events]
 
 
 @router.get("/interventions/wind-down")
-async def check_wind_down(user_id: str = "default"):
+async def check_wind_down(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
     latest = history.latest_point(user_id)
     wind_down = intervention_engine.detect_wind_down(user_id, latest)
     return {"wind_down": wind_down}
@@ -146,34 +153,39 @@ async def check_wind_down(user_id: str = "default"):
 
 @router.post("/interventions/schedule-break")
 async def schedule_break(
-    user_id: str = Query("default"),
     break_time: str = Query(...),
     intervention_type: str = Query("breathing_reset"),
+    current_user: dict = Depends(get_current_user),
 ):
+    user_id = current_user["username"]
     return intervention_engine.schedule_break(user_id, break_time, intervention_type)
 
 
 @router.get("/interventions/scheduled-breaks")
-async def get_scheduled_breaks(user_id: str = "default"):
+async def get_scheduled_breaks(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
     return {"breaks": intervention_engine.get_scheduled_breaks(user_id)}
 
 
 @router.post("/interventions/cancel-break")
 async def cancel_break(
-    user_id: str = Query("default"),
     break_id: str = Query(...),
+    current_user: dict = Depends(get_current_user),
 ):
+    user_id = current_user["username"]
     return intervention_engine.cancel_break(user_id, break_id)
 
 
 @router.get("/interventions/check-due-breaks")
-async def check_due_breaks(user_id: str = "default"):
+async def check_due_breaks(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
     due = intervention_engine.check_due_breaks(user_id)
     return {"due_break": due}
 
 
-@router.get("/calibration/{user_id}", response_model=CalibrationStatus)
-async def get_calibration(user_id: str):
+@router.get("/calibration", response_model=CalibrationStatus)
+async def get_calibration(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
     baseline = engine._get_baseline(user_id)
     if baseline:
         status = baseline.get_calibration_status(
@@ -199,13 +211,13 @@ async def get_calibration(user_id: str):
 
 
 @router.post("/reset")
-async def reset_session(req: ResetRequest):
+async def reset_session(current_user: dict = Depends(get_current_user)):
     """Clear all in-memory session data for a fresh start."""
-    user_id = req.user_id
+    user_id = current_user["username"]
     history.reset(user_id)
     engine.reset_user_state(user_id)
-        
-    await manager.broadcast({"type": "session_reset", "user_id": user_id})
+
+    await manager.send_personal_message({"type": "session_reset", "user_id": user_id}, user_id)
     return {"status": "ok", "message": f"Session data cleared for {user_id}"}
 
 
@@ -281,7 +293,8 @@ async def wellness_checkin(req: WellnessCheckinRequest):
 
 
 @router.get("/wellness/history", response_model=list[WellnessCheckinResponse])
-async def wellness_history(user_id: str = "default", limit: int = 30):
+async def wellness_history(limit: int = 30, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
     return history.get_wellness_history(user_id, limit)
 
 
@@ -292,13 +305,46 @@ async def journal_entry(req: JournalEntryRequest):
 
 
 @router.get("/journal/entries", response_model=list[JournalEntryResponse])
-async def journal_entries(user_id: str = "default", limit: int = 50):
+async def journal_entries(limit: int = 50, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
     return history.get_journal_entries(user_id, limit)
 
 
+@router.get("/settings/thresholds", response_model=UserSettings)
+async def get_user_settings(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
+    baseline = engine._get_baseline(user_id)
+    if not baseline:
+        return UserSettings(user_id=user_id)
+    s = baseline.get_settings()
+    return UserSettings(
+        user_id=user_id,
+        mild_threshold=s.get("mild_threshold", 55.0),
+        high_threshold=s.get("high_threshold", 75.0),
+    )
+
+
+@router.post("/settings/thresholds")
+async def update_user_settings(req: SettingsRequest, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["username"]
+    baseline = engine._get_baseline(user_id)
+    if baseline:
+        baseline.update_settings(mild=req.mild_threshold, high=req.high_threshold)
+    return {"status": "ok"}
+
+
 @router.websocket("/ws/stress")
-async def websocket_stress(ws: WebSocket):
-    await manager.connect(ws)
+async def websocket_stress(ws: WebSocket, token: str = Query(...)):
+    # Simple verification: get user from token
+    try:
+        from app.api.deps import get_user_from_token
+        user = await get_user_from_token(token)
+        user_id = user["username"]
+    except Exception:
+        await ws.close(code=4001)
+        return
+
+    await manager.connect(ws, user_id)
     try:
         while True:
             try:
@@ -347,10 +393,10 @@ async def websocket_stress(ws: WebSocket):
                             score_before=float(result.get("score", 0.0)),
                             notes="auto-generated recommendation",
                         )
-                    await ws.send_json(
-                        {"type": "stress_update", **result, "user_id": uid}
+                    await manager.send_personal_message(
+                        {"type": "stress_update", **result, "user_id": user_id}, user_id
                     )
             except (json.JSONDecodeError, KeyError):
                 pass
     except WebSocketDisconnect:
-        manager.disconnect(ws)
+        manager.disconnect(ws, user_id)

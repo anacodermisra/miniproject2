@@ -71,8 +71,8 @@ export default function WellnessPage() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      api.getWellnessHistory(userId).catch(() => []),
-      api.getJournalEntries(userId).catch(() => []),
+      api.getWellnessHistory().catch(() => []),
+      api.getJournalEntries().catch(() => []),
     ]).then(([h, j]) => {
       // Map API response to Component types
       setHistory(h.map(item => ({
@@ -94,10 +94,10 @@ export default function WellnessPage() {
   const handleCheckIn = async () => {
     if (selectedEnergy && selectedSleep) {
       try {
-        await api.saveWellnessCheckin(userId, selectedEnergy, selectedSleep);
+        await api.saveWellnessCheckin(selectedEnergy, selectedSleep);
         setCheckInDone(true);
         // Refresh history
-        const h = await api.getWellnessHistory(userId);
+        const h = await api.getWellnessHistory();
         setHistory(h.map(item => ({
           date: new Date(item.timestamp * 1000).toLocaleDateString([], { weekday: 'short' }),
           energy: item.energy as EnergyLevel,
