@@ -186,7 +186,8 @@ def get_history(user_id: str, hours: int = 24) -> List[HistoryPoint]:
         with _connect() as conn:
             rows = conn.execute(
                 """
-                SELECT timestamp, score, level, insights_json
+                SELECT timestamp, score, level, insights_json, 
+                       typing_speed_wpm, error_rate, click_count
                 FROM history
                 WHERE user_id=? AND timestamp > ?
                 ORDER BY timestamp ASC
@@ -194,7 +195,7 @@ def get_history(user_id: str, hours: int = 24) -> List[HistoryPoint]:
                 (user_id, cutoff),
             ).fetchall()
     points = []
-    for ts, score, level, insights_json in rows:
+    for ts, score, level, insights_json, wpm, err, clicks in rows:
         try:
             insights = json.loads(insights_json) if insights_json else []
         except json.JSONDecodeError:
@@ -205,6 +206,9 @@ def get_history(user_id: str, hours: int = 24) -> List[HistoryPoint]:
                 score=float(score),
                 level=str(level),
                 insights=insights if isinstance(insights, list) else [],
+                typing_speed_wpm=float(wpm or 0.0),
+                error_rate=float(err or 0.0),
+                click_count=int(clicks or 0),
             )
         )
     return points

@@ -58,6 +58,9 @@ export interface HistoryPoint {
   score: number;
   level: string;
   insights: string[];
+  typing_speed_wpm?: number;
+  error_rate?: number;
+  click_count?: number;
 }
 
 export interface CalibrationStatus {

@@ -98,6 +98,10 @@ class HistoryPoint(BaseModel):
     score: float
     level: str
     insights: List[str] = []
+    # Raw features for multi-chart rendering
+    typing_speed_wpm: Optional[float] = 0.0
+    error_rate: Optional[float] = 0.0
+    click_count: Optional[int] = 0
 
 
 class FeedbackRequest(BaseModel):

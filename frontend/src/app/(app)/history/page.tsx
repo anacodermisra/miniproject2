@@ -88,14 +88,31 @@ export default function HistoryPage() {
     if (hours === 48) bucketSize = 1800;
     if (hours === 168) bucketSize = 7200;
 
-    const buckets: Record<number, { sum: number; count: number; timestamp: number }> = {};
+    const buckets: Record<number, { 
+      sum: number; 
+      count: number; 
+      timestamp: number;
+      wpm_sum: number;
+      err_sum: number;
+      clicks_sum: number;
+    }> = {};
 
     history.forEach((h) => {
       const bucketIdx = Math.floor(h.timestamp / bucketSize) * bucketSize;
       if (!buckets[bucketIdx]) {
-        buckets[bucketIdx] = { sum: 0, count: 0, timestamp: bucketIdx };
+        buckets[bucketIdx] = { 
+          sum: 0, 
+          count: 0, 
+          timestamp: bucketIdx,
+          wpm_sum: 0,
+          err_sum: 0,
+          clicks_sum: 0 
+        };
       }
       buckets[bucketIdx].sum += h.score;
+      buckets[bucketIdx].wpm_sum += h.typing_speed_wpm || 0;
+      buckets[bucketIdx].err_sum += h.error_rate || 0;
+      buckets[bucketIdx].clicks_sum += h.click_count || 0;
       buckets[bucketIdx].count += 1;
     });
 
@@ -103,6 +120,9 @@ export default function HistoryPage() {
       .sort((a, b) => a.timestamp - b.timestamp)
       .map((b) => {
         const avgScore = b.sum / b.count;
+        const avgWpm = b.wpm_sum / b.count;
+        const avgErr = b.err_sum / b.count;
+        
         const date = new Date(b.timestamp * 1000);
         
         let timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -115,6 +135,8 @@ export default function HistoryPage() {
           timestamp: b.timestamp,
           score: avgScore,
           stress: avgScore,
+          wpm: avgWpm,
+          error_rate: avgErr * 100, // percentage for chart
           level: avgScore > 65 ? "STRESSED" : avgScore > 35 ? "MILD" : "NEUTRAL",
         };
       });
@@ -176,48 +198,98 @@ export default function HistoryPage() {
         ))}
       </div>
 
-      {/* Chart */}
-      <div className="rounded-xl border border-[#1c1c2e] bg-[#141420] p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Activity className="w-4 h-4 text-[#5b4fc4]" />
-          <h3 className="text-sm text-[#857F75] font-medium">Stress timeline</h3>
+      {/* Secondary Charts: Behavioral Patterns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Stress Timeline */}
+        <div className="rounded-xl border border-[#1c1c2e] bg-[#141420] p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-4 h-4 text-[#5b4fc4]" />
+            <h3 className="text-sm text-[#857F75] font-medium">Stress timeline</h3>
+          </div>
+          {loading ? (
+            <div className="h-[300px] flex items-center justify-center">
+              <div className="text-sm text-[#857F75] animate-pulse">Reading your rhythm...</div>
+            </div>
+          ) : chartData.length === 0 ? (
+            <div className="h-[300px] flex items-center justify-center">
+              <div className="text-sm text-[#857F75]">No history yet — start tracking to see your rhythm unfold ✨</div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="stressGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#5b4fc4" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#5b4fc4" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <XAxis 
+                  dataKey="time" 
+                  tick={{ fill: "#857F75", fontSize: 10 }} 
+                  axisLine={false} 
+                  tickLine={false}
+                  minTickGap={30}
+                />
+                <YAxis domain={[0, 100]} tick={{ fill: "#857F75", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
+                <Tooltip
+                  contentStyle={{ background: "#0a0a0f", border: "1px solid #1c1c2e", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}
+                  labelStyle={{ color: "#857F75" }}
+                  formatter={(val: number) => [val.toFixed(1), "Stress"]}
+                />
+                <ReferenceLine y={25} stroke="#22c55e" strokeDasharray="4 4" strokeOpacity={0.2} label={{ value: "Calm", fill: "#22c55e", fontSize: 10, opacity: 0.5 }} />
+                <ReferenceLine y={65} stroke="#dc2626" strokeDasharray="4 4" strokeOpacity={0.2} label={{ value: "Stressed", fill: "#dc2626", fontSize: 10, opacity: 0.5 }} />
+                <Area type="monotone" dataKey="stress" stroke="#5b4fc4" fill="url(#stressGrad)" strokeWidth={2} dot={hours <= 12} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
-        {loading ? (
-          <div className="h-[300px] flex items-center justify-center">
-            <div className="text-sm text-[#857F75] animate-pulse">Reading your rhythm...</div>
+
+        {/* Behavioral Patterns Chart */}
+        <div className="rounded-xl border border-[#1c1c2e] bg-[#141420] p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="w-4 h-4 text-[#3b82f6]" />
+            <h3 className="text-sm text-[#857F75] font-medium">Behavioral patterns</h3>
           </div>
-        ) : chartData.length === 0 ? (
-          <div className="h-[300px] flex items-center justify-center">
-            <div className="text-sm text-[#857F75]">No history yet — start tracking to see your rhythm unfold ✨</div>
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="energyGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#5b4fc4" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#5b4fc4" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <XAxis 
-                dataKey="time" 
-                tick={{ fill: "#857F75", fontSize: 10 }} 
-                axisLine={false} 
-                tickLine={false}
-                minTickGap={30}
-              />
-              <YAxis domain={[0, 100]} tick={{ fill: "#857F75", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
-              <Tooltip
-                contentStyle={{ background: "#0a0a0f", border: "1px solid #1c1c2e", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}
-                labelStyle={{ color: "#857F75" }}
-                formatter={(val: number) => [val.toFixed(1), "Stress"]}
-              />
-              <ReferenceLine y={25} stroke="#22c55e" strokeDasharray="4 4" strokeOpacity={0.2} label={{ value: "Calm", fill: "#22c55e", fontSize: 10, opacity: 0.5 }} />
-              <ReferenceLine y={65} stroke="#dc2626" strokeDasharray="4 4" strokeOpacity={0.2} label={{ value: "Stressed", fill: "#dc2626", fontSize: 10, opacity: 0.5 }} />
-              <Area type="monotone" dataKey="stress" stroke="#5b4fc4" fill="url(#energyGrad)" strokeWidth={2} dot={hours <= 12} />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
+          {loading ? (
+            <div className="h-[300px] flex items-center justify-center">
+              <div className="text-sm text-[#857F75] animate-pulse">Analyzing patterns...</div>
+            </div>
+          ) : chartData.length === 0 ? (
+            <div className="h-[300px] flex items-center justify-center">
+              <div className="text-sm text-[#857F75]">Insufficient behavioral data</div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="wpmGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="errGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#dc2626" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#dc2626" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis 
+                  dataKey="time" 
+                  tick={{ fill: "#857F75", fontSize: 10 }} 
+                  axisLine={false} 
+                  tickLine={false}
+                  minTickGap={30}
+                />
+                <YAxis yAxisId="left" domain={[0, 'auto']} hide />
+                <YAxis yAxisId="right" orientation="right" domain={[0, 'auto']} hide />
+                <Tooltip
+                  contentStyle={{ background: "#0a0a0f", border: "1px solid #1c1c2e", borderRadius: 8 }}
+                  labelStyle={{ color: "#857F75" }}
+                />
+                <Area yAxisId="left" type="monotone" dataKey="wpm" stroke="#3b82f6" fill="url(#wpmGrad)" strokeWidth={2} name="WPM" />
+                <Area yAxisId="right" type="monotone" dataKey="error_rate" stroke="#dc2626" fill="url(#errGrad)" strokeWidth={2} name="Error %" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
