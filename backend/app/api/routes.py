@@ -354,3 +354,79 @@ async def websocket_stress(ws: WebSocket):
                 pass
     except WebSocketDisconnect:
         manager.disconnect(ws)
+
+
+# ─── SSE Inference Endpoint (Alternative to WebSocket) ───
+
+from fastapi.responses import StreamingResponse
+from datetime import datetime
+import json as json_mod
+
+@router.get("/inference/stream")
+async def inference_sse_stream(
+    user_id: str = Query(default="default"),
+    duration_minutes: int = Query(default=30, ge=1, le=120)
+):
+    """SSE stream of stress inference updates.
+    
+    Alternative to WebSocket for clients that prefer SSE.
+    Streams stress scores every 5 seconds for specified duration.
+    """
+    from app.services.history import get_recent_history
+    
+    async def event_generator():
+        max_iterations = duration_minutes * 12  # 5-second intervals
+        
+        for i in range(max_iterations):
+            # Get recent data
+            recent = get_recent_history(user_id, minutes=5)
+            
+            if recent and engine.is_ready:
+                latest = recent[-1]
+                features = {
+                    "hold_time_mean": latest.get("hold_time_mean", 0.2),
+                    "flight_time_mean": latest.get("flight_time_mean", 0.15),
+                    "typing_speed_wpm": latest.get("typing_speed_wpm", 60),
+                    "error_rate": latest.get("error_rate", 0.05),
+                    "mouse_speed_mean": latest.get("mouse_speed_mean", 200),
+                }
+                
+                result = engine.predict(features, user_id=user_id)
+                
+                event_data = {
+                    "type": "stress_update",
+                    "timestamp": datetime.now().isoformat(),
+                    "score": result.get("score", 50),
+                    "level": result.get("level", "NEUTRAL"),
+                    "confidence": result.get("confidence", 0.0),
+                    "features": {
+                        "typing_speed_wpm": features["typing_speed_wpm"],
+                        "error_rate": features["error_rate"],
+                    }
+                }
+            else:
+                event_data = {
+                    "type": "stress_update",
+                    "timestamp": datetime.now().isoformat(),
+                    "score": 50,
+                    "level": "NEUTRAL",
+                    "confidence": 0.0 if not recent else 0.5,
+                    "status": "collecting_data" if not recent else "engine_initializing"
+                }
+            
+            yield f"data: {json_mod.dumps(event_data)}\n\n"
+            
+            # Heartbeat
+            if i % 6 == 0 and i > 0:
+                yield f"data: {json_mod.dumps({'type': 'heartbeat'})}\n\n"
+            
+            await asyncio.sleep(5)
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )

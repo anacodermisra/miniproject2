@@ -1,0 +1,56 @@
+{
+  "ensemble": {
+    "models": [
+      {
+        "name": "xgboost",
+        "file": "xgb_model.onnx",
+        "weight": 0.5,
+        "input_shape": [
+          1,
+          23
+        ],
+        "output_names": [
+          "label",
+          "probabilities"
+        ]
+      }
+    ],
+    "labels": [
+      "NEUTRAL",
+      "MILD",
+      "STRESSED"
+    ],
+    "feature_names": [
+      "hold_time_mean",
+      "hold_time_std",
+      "hold_time_median",
+      "flight_time_mean",
+      "flight_time_std",
+      "typing_speed_wpm",
+      "error_rate",
+      "pause_frequency",
+      "pause_duration_mean",
+      "burst_length_mean",
+      "rhythm_entropy",
+      "mouse_speed_mean",
+      "mouse_speed_std",
+      "direction_change_rate",
+      "click_count",
+      "rage_click_count",
+      "scroll_velocity_std",
+      "tab_switch_freq",
+      "switch_entropy",
+      "session_fragmentation",
+      "hour_of_day",
+      "day_of_week",
+      "session_duration_min"
+    ],
+    "num_features": 23,
+    "thresholds": {
+      "MILD": 40,
+      "STRESSED": 70
+    },
+    "version": "1.0.0",
+    "export_date": "2026-04-17T22:39:27.737798"
+  }
+}

@@ -4,6 +4,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 import os
+import secrets
 from typing import Optional
 
 from app.core.auth import hash_password, verify_password, create_access_token
@@ -113,6 +114,72 @@ def get_user_by_email(email: str) -> Optional[dict]:
 
 def login(email_or_username: str, password: str) -> Optional[dict]:
     user = authenticate_user(email_or_username, password)
+    if not user:
+        return None
+    token = create_access_token({"sub": str(user["id"]), "email": user["email"]})
+    return {
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "username": user["username"],
+            "display_name": user["display_name"],
+        },
+        "access_token": token,
+        "token_type": "bearer",
+    }
+
+
+def _build_user_dict(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "email": row["email"],
+        "username": row["username"],
+        "display_name": row["display_name"],
+        "created_at": row["created_at"],
+    }
+
+
+def create_google_user(email: str, name: str, google_id: str) -> Optional[dict]:
+    random_password = secrets.token_urlsafe(32)
+    email_prefix = email.split("@")[0]
+    username_base = email_prefix.lower().replace(".", "_").replace("+", "_")
+    username = username_base
+    suffix = 1
+    with _connect() as conn:
+        while conn.execute(
+            "SELECT 1 FROM users WHERE username = ?", (username,)
+        ).fetchone():
+            username = f"{username_base}{suffix}"
+            suffix += 1
+    return create_user(email, username, random_password, name)
+
+
+def create_or_login_google_user(
+    email: str, name: str, google_id: str
+) -> Optional[dict]:
+    existing = get_user_by_email(email)
+    if existing:
+        with _connect() as conn:
+            conn.execute(
+                "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?",
+                (existing["id"],),
+            )
+            conn.commit()
+        token = create_access_token(
+            {"sub": str(existing["id"]), "email": existing["email"]}
+        )
+        return {
+            "user": {
+                "id": existing["id"],
+                "email": existing["email"],
+                "username": existing["username"],
+                "display_name": existing["display_name"],
+            },
+            "access_token": token,
+            "token_type": "bearer",
+        }
+
+    user = create_google_user(email, name, google_id)
     if not user:
         return None
     token = create_access_token({"sub": str(user["id"]), "email": user["email"]})

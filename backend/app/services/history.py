@@ -186,7 +186,9 @@ def get_history(user_id: str, hours: int = 24) -> List[HistoryPoint]:
         with _connect() as conn:
             rows = conn.execute(
                 """
-                SELECT timestamp, score, level, insights_json
+                SELECT timestamp, score, level, insights_json,
+                       typing_speed_wpm, rage_click_count, error_rate, click_count,
+                       mouse_speed_mean, mouse_reentry_count, mouse_reentry_latency_ms
                 FROM history
                 WHERE user_id=? AND timestamp > ?
                 ORDER BY timestamp ASC
@@ -194,7 +196,8 @@ def get_history(user_id: str, hours: int = 24) -> List[HistoryPoint]:
                 (user_id, cutoff),
             ).fetchall()
     points = []
-    for ts, score, level, insights_json in rows:
+    for row in rows:
+        ts, score, level, insights_json = row[0], row[1], row[2], row[3]
         try:
             insights = json.loads(insights_json) if insights_json else []
         except json.JSONDecodeError:
@@ -205,6 +208,13 @@ def get_history(user_id: str, hours: int = 24) -> List[HistoryPoint]:
                 score=float(score),
                 level=str(level),
                 insights=insights if isinstance(insights, list) else [],
+                typing_speed_wpm=float(row[4]) if row[4] else 0.0,
+                rage_click_count=int(row[5]) if row[5] else 0,
+                error_rate=float(row[6]) if row[6] else 0.0,
+                click_count=int(row[7]) if row[7] else 0,
+                mouse_speed_mean=float(row[8]) if row[8] else 0.0,
+                mouse_reentry_count=float(row[9]) if row[9] else 0.0,
+                mouse_reentry_latency_ms=float(row[10]) if row[10] else 0.0,
             )
         )
     return points
@@ -215,7 +225,7 @@ def get_stats(user_id: str) -> dict:
         with _connect() as conn:
             rows = conn.execute(
                 """
-                SELECT score, level, typing_speed_wpm, rage_click_count, error_rate, click_count
+                SELECT score, level, typing_speed_wpm, rage_click_count, error_rate, click_count, mouse_speed_mean
                 FROM history
                 WHERE user_id=?
                 ORDER BY timestamp ASC
@@ -233,6 +243,7 @@ def get_stats(user_id: str) -> dict:
             "rage_click_count": 0,
             "error_rate": 0,
             "click_count": 0,
+            "mouse_speed_mean": 0,
         }
 
     total = len(rows)
@@ -242,6 +253,7 @@ def get_stats(user_id: str) -> dict:
     total_rage = sum(int(r[3]) for r in rows)
     avg_error = sum(float(r[4]) for r in rows) / total
     total_clicks = sum(int(r[5]) for r in rows)
+    avg_mouse = sum(float(r[6]) for r in rows) / total
 
     return {
         "total_samples": total,
@@ -252,6 +264,7 @@ def get_stats(user_id: str) -> dict:
         "rage_click_count": int(total_rage),
         "error_rate": round(avg_error, 3),
         "click_count": int(total_clicks),
+        "mouse_speed_mean": round(avg_mouse, 1),
     }
 
 

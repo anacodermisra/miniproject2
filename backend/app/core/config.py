@@ -8,7 +8,7 @@ DESCRIPTION = "Privacy-first behavioral stress detection"
 LABELS = ["NEUTRAL", "MILD", "STRESSED"]
 LABEL_COLORS = {"NEUTRAL": "#2ecc71", "MILD": "#f39c12", "STRESSED": "#e74c3c"}
 
-# Feature names (order matters)
+# Feature names (order matters) — 23 features for model input
 FEATURE_NAMES = [
     "hold_time_mean",
     "hold_time_std",
@@ -33,6 +33,23 @@ FEATURE_NAMES = [
     "hour_of_day",
     "day_of_week",
     "session_duration_min",
+]
+
+# Feature interactions (Issue #3) — 5 computed features for explainability
+# These are computed from base features but not fed to current model
+# (will be included when model is retrained)
+INTERACTION_FEATURE_NAMES = [
+    "typing_speed_wpm_x_error_rate",
+    "rage_click_count_x_direction_change_rate",
+    "session_fragmentation_x_tab_switch_freq",
+    "pause_frequency_x_rhythm_entropy",
+    "mouse_speed_std_x_click_count",
+]
+
+# Extended feature names (23 base + 5 interactions + 2 reentry = 30 total)
+EXTENDED_FEATURE_NAMES = FEATURE_NAMES + INTERACTION_FEATURE_NAMES + [
+    "mouse_reentry_count",
+    "mouse_reentry_latency_ms",
 ]
 
 # Thresholds

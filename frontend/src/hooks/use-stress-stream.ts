@@ -10,6 +10,7 @@ interface UseStressStreamReturn {
   history: StressResult[];
   status: ConnectionStatus;
   error: string | null;
+  wsRef: React.MutableRefObject<WebSocket | null>;
 }
 
 export function useStressStream(): UseStressStreamReturn {
@@ -162,5 +163,5 @@ export function useStressStream(): UseStressStreamReturn {
     };
   }, [connect]);
 
-  return { data, history, status, error };
+  return { data, history, status, error, wsRef };
 }

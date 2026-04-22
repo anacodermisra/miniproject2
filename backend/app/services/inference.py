@@ -14,6 +14,48 @@ from app.core.config import (
     MODEL_SCORE_WEIGHT,
 )
 
+# ═══════════════════════════════════════════════════════════════
+# DYNAMIC HYBRID WEIGHTING (Issue #2 Fix)
+# ═══════════════════════════════════════════════════════════════
+
+def compute_adaptive_weight(
+    confidence: float,
+    is_calibrated: bool,
+    model_score: float,
+    equation_score: float,
+    base_weight: float = MODEL_SCORE_WEIGHT,
+) -> float:
+    """
+    Compute adaptive weight for ML/heuristic blend.
+    
+    Logic:
+    - High confidence (>0.8) → trust ML more (+0.15)
+    - Low confidence (<0.5) → trust heuristic more (-0.15)
+    - Uncalibrated user → conservative (-0.10)
+    - Large ML/heuristic disagreement → reduce ML weight
+    
+    Returns weight in range [0.5, 0.9]
+    """
+    weight = base_weight
+    
+    # Adjust based on confidence
+    if confidence > 0.8:
+        weight += 0.15  # High confidence → trust ML
+    elif confidence < 0.5:
+        weight -= 0.15  # Low confidence → trust heuristic
+    
+    # Safety for new users
+    if not is_calibrated:
+        weight -= 0.10
+    
+    # If ML and heuristic strongly disagree, be conservative
+    score_diff = abs(model_score - equation_score)
+    if score_diff > 30:  # >30 point disagreement
+        weight -= 0.05
+    
+    # Clamp to valid range [0.5, 0.9]
+    return float(max(0.5, min(0.9, weight)))
+
 logger = logging.getLogger("mindpulse.inference")
 
 
@@ -27,7 +69,10 @@ class InferenceEngine:
         self._baselines = {}
         self._ready = False
         self._shap_explainer = None
-        self._last_scores: Dict[str, float] = {}
+        self._use_ensemble = False
+        self._ensemble = None
+        self._lstm_model = None
+        self._lstm_buffer = {}  # user_id -> list of recent feature vectors
 
     @staticmethod
     def _sigmoid(x: float) -> float:
@@ -134,10 +179,24 @@ class InferenceEngine:
             return "MILD"
         return "NEUTRAL"
 
-    def load(self):
-        """Lazy-load model from ml package."""
+    def load(self, use_ensemble: bool = False):
+        """Lazy-load model from ml package.
+        
+        Args:
+            use_ensemble: If True, load ensemble models instead of single XGBoost
+        """
         if self._ready:
             return
+        
+        self._use_ensemble = use_ensemble
+        
+        if use_ensemble:
+            self._load_ensemble()
+        else:
+            self._load_single_model()
+
+    def _load_single_model(self):
+        """Load single XGBoost model (original behavior)."""
         try:
             from app.ml.model import load_model, DualNormalizer
 
@@ -160,6 +219,24 @@ class InferenceEngine:
             logger.error(f"Model load failed: {e}")
             self._ready = False
 
+    def _load_ensemble(self):
+        """Load ensemble models."""
+        try:
+            from app.ml.ensemble import ensemble as ensemble_model
+            
+            ensemble_model.load(allow_train_fallback=True)
+            
+            if ensemble_model.is_ready:
+                self._ensemble = ensemble_model
+                self._ready = True
+                logger.info("Ensemble models loaded successfully")
+            else:
+                logger.warning("Ensemble not ready, falling back to single model")
+                self._load_single_model()
+        except Exception as e:
+            logger.error(f"Ensemble load failed: {e}")
+            self._load_single_model()
+
     def _get_baseline(self, user_id: str):
         """Get or create a PersonalBaseline for a user."""
         if user_id not in self._baselines:
@@ -175,7 +252,7 @@ class InferenceEngine:
 
     @property
     def is_ready(self) -> bool:
-        return self._ready and self._model is not None
+        return self._ready and (self._model is not None or self._ensemble is not None)
 
     def _compute_shap_values(self, z: np.ndarray) -> Optional[dict]:
         """Compute SHAP values for feature-level explainability."""
@@ -240,6 +317,16 @@ class InferenceEngine:
             features_dict, raw, baseline, hour, is_idle=is_idle
         )
 
+        # ═══════════════════════════════════════════════════════
+        # LSTM BUFFER: Track recent features for temporal model
+        # ═══════════════════════════════════════════════════════
+        if user_id not in self._lstm_buffer:
+            self._lstm_buffer[user_id] = []
+        self._lstm_buffer[user_id].append(raw.tolist())
+        # Keep last 30 windows (150 seconds)
+        if len(self._lstm_buffer[user_id]) > 30:
+            self._lstm_buffer[user_id] = self._lstm_buffer[user_id][-30:]
+
         shap_values = None
 
         if not self.is_ready:
@@ -248,43 +335,87 @@ class InferenceEngine:
             level = self._level_from_score(final_score)
             confidence = 0.45
             probs = np.array([0.33, 0.33, 0.34], dtype=np.float32)
+            adaptive_weight = MODEL_SCORE_WEIGHT
         else:
             z = self._normalizer.transform(raw, hour, baseline)
 
-            probs = self._model.predict_proba(z.reshape(1, -1))[0]
-            confidence = float(np.max(probs))
-            model_score = float(probs[0] * 5.0 + probs[1] * 55.0 + probs[2] * 100.0)
-            final_score = (
-                MODEL_SCORE_WEIGHT * model_score
-                + (1.0 - MODEL_SCORE_WEIGHT) * equation_score
+            if self._ensemble is not None and self._ensemble.is_ready:
+                # ═══════════════════════════════════════════════════════
+                # ENSEMBLE PREDICTION (Week 5-6)
+                # ═══════════════════════════════════════════════════════
+                ensemble_result = self._ensemble.predict(z)
+                probs = np.array([
+                    ensemble_result["probabilities"]["NEUTRAL"],
+                    ensemble_result["probabilities"]["MILD"],
+                    ensemble_result["probabilities"]["STRESSED"],
+                ], dtype=np.float32)
+                confidence = ensemble_result["confidence"]
+                model_score = float(
+                    probs[0] * 5.0 + probs[1] * 55.0 + probs[2] * 100.0
+                )
+            else:
+                probs = self._model.predict_proba(z.reshape(1, -1))[0]
+                confidence = float(np.max(probs))
+                model_score = float(probs[0] * 5.0 + probs[1] * 55.0 + probs[2] * 100.0)
+
+                shap_values = self._compute_shap_values(z)
+
+            # ═══════════════════════════════════════════════════════
+            # DYNAMIC WEIGHTING (Issue #2)
+            # ═══════════════════════════════════════════════════════
+            is_calibrated = baseline is not None and baseline.is_calibrated()
+            adaptive_weight = compute_adaptive_weight(
+                confidence=confidence,
+                is_calibrated=is_calibrated,
+                model_score=model_score,
+                equation_score=equation_score,
             )
-            shap_values = self._compute_shap_values(z)
 
-        # 2. Temporal Smoothing Layer (Stateful EMA) (Root Cause 2 / Fix 2 & 4)
-        prev_score = self._last_scores.get(user_id, final_score)
-        
-        # Alpha=0.2 (20% current, 80% past) for extreme stability
-        alpha = 0.2
-        
-        # If idle, we use a slightly faster decay (Fix 4)
-        if is_idle:
-            final_score = 0.7 * prev_score # Gradual momentum recovery
-            logger.debug(f"Idle recovery: decaying {prev_score:.1f} -> {final_score:.1f}")
-        else:
-            final_score = (alpha * final_score) + ((1 - alpha) * prev_score)
+            final_score = (
+                adaptive_weight * model_score
+                + (1.0 - adaptive_weight) * equation_score
+            )
 
-        self._last_scores[user_id] = final_score
-        
-        # Apply Personal Feedback Bias (Shift based on user labels)
-        if baseline:
-            bias = baseline.get_feedback_bias()
-            final_score += (bias * 1.5)
-            logger.info(f"Applying bias adjust: {bias*1.5:+.1f}")
+            # ═══════════════════════════════════════════════════════
+            # LSTM TEMPORAL CHECK (Month 2-3)
+            # Second opinion for borderline cases
+            # ═══════════════════════════════════════════════════════
+            lstm_adjustment = 0.0
+            if self._lstm_model and self._lstm_model.is_ready:
+                near_boundary = 60 <= final_score <= 80
+                if near_boundary and len(self._lstm_buffer.get(user_id, [])) >= 12:
+                    sequence = np.array(self._lstm_buffer[user_id][-12:], dtype=np.float32)
+                    lstm_result = self._lstm_model.predict_sequence(sequence)
+                    lstm_score = float(
+                        lstm_result["probabilities"]["NEUTRAL"] * 5.0
+                        + lstm_result["probabilities"]["MILD"] * 55.0
+                        + lstm_result["probabilities"]["STRESSED"] * 100.0
+                    )
+                    # Blend LSTM as second opinion (20% weight)
+                    lstm_adjustment = (lstm_score - final_score) * 0.2
+                    final_score += lstm_adjustment
 
-        final_score = self._clamp_score(final_score)
-        level = self._level_from_score(final_score)
+            # ═══════════════════════════════════════════════════════
+            # ONLINE LEARNING ADAPTER (Month 2-3)
+            # Per-user adjustments
+            # ═══════════════════════════════════════════════════════
+            from app.ml.online_learning import online_learner
+            try:
+                final_score, adjusted_probs_dict = online_learner.apply_adapter(
+                    user_id, final_score,
+                    {l: round(float(p), 3) for l, p in zip(LABELS, probs)}
+                )
+                # Update probs from adapter
+                probs = np.array([
+                    adjusted_probs_dict["NEUTRAL"],
+                    adjusted_probs_dict["MILD"],
+                    adjusted_probs_dict["STRESSED"],
+                ], dtype=np.float32)
+            except Exception as e:
+                logger.warning(f"Online learning adapter failed: {e}")
 
-        shap_values = self._compute_shap_values(z)
+            final_score = self._clamp_score(final_score)
+            level = self._level_from_score(final_score)
 
         timestamp = time.time()
 
@@ -299,6 +430,8 @@ class InferenceEngine:
             "model_score": round(model_score, 1),
             "equation_score": round(equation_score, 1),
             "final_score": round(final_score, 1),
+            "adaptive_weight": round(adaptive_weight, 2) if self.is_ready else MODEL_SCORE_WEIGHT,
+            "lstm_adjustment": round(lstm_adjustment, 2) if self.is_ready else 0.0,
             "level": level,
             "confidence": round(confidence, 3),
             "probabilities": {l: round(float(p), 3) for l, p in zip(LABELS, probs)},

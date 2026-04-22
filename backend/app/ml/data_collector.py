@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import logging
 import threading
 import time
 from collections import deque
@@ -27,7 +28,15 @@ from dataclasses import dataclass
 from typing import Deque, Dict, List, Optional, Tuple
 
 import psutil
-from pynput import keyboard, mouse
+try:
+    from pynput import keyboard, mouse
+    _PYNPUT_AVAILABLE = True
+except Exception:  # pragma: no cover - platform-dependent import
+    keyboard = None  # type: ignore[assignment]
+    mouse = None  # type: ignore[assignment]
+    _PYNPUT_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 # ────────────────────────────────────────────────────────────────
 # Event Data Classes (Privacy-Safe)
@@ -152,7 +161,7 @@ class BehavioralCollector:
 
         try:
             # Special keys (Key.space, Key.enter, etc.)
-            if isinstance(key, keyboard.Key):
+            if keyboard is not None and isinstance(key, keyboard.Key):
                 return f"key:{key.name}"
         except Exception:
             pass
@@ -165,9 +174,9 @@ class BehavioralCollector:
         Category only — never save actual key char.
         """
         try:
-            if key == keyboard.Key.backspace:
+            if keyboard is not None and key == keyboard.Key.backspace:
                 return "backspace"
-            if key == keyboard.Key.space:
+            if keyboard is not None and key == keyboard.Key.space:
                 return "special"
 
             if hasattr(key, "char") and key.char:
@@ -351,6 +360,11 @@ class BehavioralCollector:
     def start(self):
         with self._lock:
             if self._running:
+                return
+            if not _PYNPUT_AVAILABLE:
+                logger.warning(
+                    "Global input listeners unavailable on this platform; running without keyboard/mouse capture."
+                )
                 return
             self._running = True
             self._cleanup_stop.clear()

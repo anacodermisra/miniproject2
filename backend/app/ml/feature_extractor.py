@@ -5,6 +5,15 @@ Transforms raw keyboard/mouse/context events into a 23-dimensional
 feature vector per sliding window. After dual normalization (global +
 per-user circadian), this becomes a 46-dimensional input to the model.
 
+With feature interactions (Issue #3), adds 5 interaction features:
+  - typing_speed_wpm × error_rate (cognitive load)
+  - rage_click_count × direction_change_rate (frustration)
+  - session_fragmentation × tab_switch_freq (chaos)
+  - pause_frequency × rhythm_entropy (break pattern)
+  - mouse_speed_std × click_count (agitation)
+
+Plus 2 reentry features = 30 total features for explainability.
+
 Fulfills Objective 2: To collect, preprocess, and structure
 stress-related datasets for model training and evaluation.
 
@@ -17,6 +26,17 @@ Feature Breakdown (23 raw features):
                   click_count, rage_click_count, scroll_velocity_std
   Context (3):    tab_switch_freq, switch_entropy, session_fragmentation
   Temporal (3):   hour_of_day, day_of_week, session_duration_min
+
+Interaction Features (5):
+  - typing_speed_wpm × error_rate
+  - rage_click_count × direction_change_rate
+  - session_fragmentation × tab_switch_freq
+  - pause_frequency × rhythm_entropy
+  - mouse_speed_std × click_count
+
+Reentry Features (2):
+  - mouse_reentry_count
+  - mouse_reentry_latency_ms
 """
 
 import math
@@ -65,6 +85,21 @@ FEATURE_NAMES = [
 ]
 
 NUM_RAW_FEATURES = len(FEATURE_NAMES)  # 23
+
+# ═══════════════════════════════════════════════════════════════
+# FEATURE INTERACTIONS (Issue #3 Fix)
+# Top 5 behavioral signatures that indicate stress
+# ═══════════════════════════════════════════════════════════════
+
+INTERACTION_FEATURES = [
+    ("typing_speed_wpm", "error_rate"),               # Cognitive load
+    ("rage_click_count", "direction_change_rate"),  # Frustration
+    ("session_fragmentation", "tab_switch_freq"),     # Chaos
+    ("pause_frequency", "rhythm_entropy"),            # Break pattern
+    ("mouse_speed_std", "click_count"),               # Agitation
+]
+
+NUM_INTERACTION_FEATURES = len(INTERACTION_FEATURES)  # 5
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -378,7 +413,46 @@ def extract_temporal_features(
 
 
 # ═══════════════════════════════════════════════════════════════
-# 5. COMBINED EXTRACTION (all 23 features)
+# 5. FEATURE INTERACTIONS (Issue #3)
+# ═══════════════════════════════════════════════════════════════
+
+def compute_interaction_features(features: dict) -> dict:
+    """
+    Compute 5 interaction features that capture behavioral signatures.
+    
+    Interactions capture combinations that individual features miss:
+    - typing_speed_wpm × error_rate: Slow but error-prone = cognitive overload
+    - rage_click_count × direction_change_rate: Frustrated + indecisive mouse
+    - session_fragmentation × tab_switch_freq: Chaotic context switching
+    - pause_frequency × rhythm_entropy: Breaking rhythm erratically
+    - mouse_speed_std × click_count: Agitated movement + many clicks
+    
+    Returns dict with 5 interaction feature names and values.
+    """
+    interactions = {}
+    
+    for feat_a, feat_b in INTERACTION_FEATURES:
+        val_a = features.get(feat_a, 0.0)
+        val_b = features.get(feat_b, 0.0)
+        
+        # Normalize values to prevent domination by large magnitudes
+        # Use log scale for features with wide ranges (WPM, click counts)
+        if feat_a in ["typing_speed_wpm", "click_count", "mouse_speed_std"]:
+            val_a = np.log1p(val_a)
+        if feat_b in ["typing_speed_wpm", "click_count", "mouse_speed_std"]:
+            val_b = np.log1p(val_b)
+        
+        # Compute interaction (multiplicative + small additive for stability)
+        interaction_name = f"{feat_a}_x_{feat_b}"
+        interaction_value = val_a * val_b + 0.01
+        
+        interactions[interaction_name] = float(interaction_value)
+    
+    return interactions
+
+
+# ═══════════════════════════════════════════════════════════════
+# 6. COMBINED EXTRACTION (all 23 + 5 = 28 features)
 # ═══════════════════════════════════════════════════════════════
 
 
@@ -426,7 +500,9 @@ def extract_feature_dict(
     session_start_time_ms: float | None = None,
 ) -> dict:
     """
-    Extract standard model features + extended explainability features.
+    Extract standard model features + interaction features + extended explainability.
+    
+    Returns 23 base features + 5 interaction features + 2 reentry features = 30 total
     """
     features_arr, names = extract_all_features(
         key_events=key_events,
@@ -437,11 +513,16 @@ def extract_feature_dict(
     )
     base = {name: float(val) for name, val in zip(names, features_arr)}
     base.update(extract_mouse_reentry_features(mouse_events, context_events))
+    
+    # Add interaction features (Issue #3)
+    interactions = compute_interaction_features(base)
+    base.update(interactions)
+    
     return base
 
 
 # ═══════════════════════════════════════════════════════════════
-# 6. SLIDING WINDOW SEGMENTATION
+# 7. SLIDING WINDOW SEGMENTATION
 # ═══════════════════════════════════════════════════════════════
 
 

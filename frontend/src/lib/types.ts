@@ -58,6 +58,13 @@ export interface HistoryPoint {
   score: number;
   level: string;
   insights: string[];
+  typing_speed_wpm?: number;
+  rage_click_count?: number;
+  error_rate?: number;
+  click_count?: number;
+  mouse_speed_mean?: number;
+  mouse_reentry_count?: number;
+  mouse_reentry_latency_ms?: number;
 }
 
 export interface CalibrationStatus {
@@ -78,6 +85,7 @@ export interface UserStats {
   rage_click_count: number;
   error_rate: number;
   click_count: number;
+  mouse_speed_mean: number;
 }
 
 export interface HealthStatus {
@@ -116,4 +124,60 @@ export interface InterventionEvent {
   score_after: number;
   recovery_score: number;
   notes: string;
+}
+
+// ─── Extended Types for New Features ───
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  title: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  user_id: string;
+  role: "user" | "assistant";
+  content: string;
+  agent_type: "focus" | "break" | "energy" | "general";
+  created_at: string;
+}
+
+export interface WellnessCheckin {
+  id: string;
+  user_id: string;
+  check_date: string;
+  energy_level: "low" | "medium" | "high";
+  sleep_quality: "poor" | "fair" | "good" | "great";
+  note?: string;
+  created_at: string;
+}
+
+export interface WellnessInsight {
+  id: string;
+  user_id: string;
+  insight_type: "pattern" | "suggestion" | "milestone";
+  content: string;
+  relevant_date?: string;
+  generated_at: string;
+}
+
+export interface FocusState {
+  flow_score: number;
+  deep_work_minutes: number;
+  context_switches: number;
+  is_in_flow: boolean;
+  suggestion?: string;
+}
+
+export interface EnergyForecast {
+  peak_hour: string;
+  peak_energy: number;
+  energy_curve: { hour: number; hour_label: string; energy: number }[];
+  suggested_schedule: { time: string; activity: string; energy: string }[];
+  confidence: "low" | "medium" | "high";
 }

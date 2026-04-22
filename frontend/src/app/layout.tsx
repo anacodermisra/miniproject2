@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClientProviders } from "./client-providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,9 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-bg text-gray-200" suppressHydrationWarning>
-        {children}
-        <Toaster richColors position="top-right" theme="dark" />
-        <div className="noise-overlay" />
+        <ClientProviders>
+          {children}
+          <div className="noise-overlay" />
+        </ClientProviders>
       </body>
     </html>
   );

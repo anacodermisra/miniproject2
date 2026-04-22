@@ -98,6 +98,13 @@ class HistoryPoint(BaseModel):
     score: float
     level: str
     insights: List[str] = []
+    typing_speed_wpm: Optional[float] = 0.0
+    rage_click_count: Optional[int] = 0
+    error_rate: Optional[float] = 0.0
+    click_count: Optional[int] = 0
+    mouse_speed_mean: Optional[float] = 0.0
+    mouse_reentry_count: Optional[float] = 0.0
+    mouse_reentry_latency_ms: Optional[float] = 0.0
 
 
 class FeedbackRequest(BaseModel):

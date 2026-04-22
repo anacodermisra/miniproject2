@@ -4,7 +4,13 @@ import { useState, FormEvent, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api, setToken } from "@/lib/api";
-import { ArrowRight, Eye, EyeOff, Sparkles } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Sparkles, Chrome } from "lucide-react";
+
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+const REDIRECT_URI = typeof window !== "undefined"
+  ? `${window.location.origin}/api/auth/google/callback`
+  : "http://localhost:3000/api/auth/google/callback";
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -27,23 +33,41 @@ function LoginForm() {
 
   useEffect(() => {
     const token = localStorage.getItem("mp_token");
-    if (token) router.push("/tracking");
-  }, [router]);
+    if (token) {
+      router.replace("/tracking");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError("");
     setLoading(true);
     try {
       const result = await api.login(email, password);
       setToken(result.access_token);
       localStorage.setItem("mp_user", JSON.stringify(result.user));
-      router.push(from);
+      router.replace(from);
     } catch (err: any) {
       setError(err.message || "Login failed");
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleSignIn = () => {
+    if (!GOOGLE_CLIENT_ID) {
+      setError("Google Sign-In not configured. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env");
+      return;
+    }
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+      scope: "email profile",
+      access_type: "offline",
+      prompt: "select_account",
+    });
+    window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`;
   };
 
   return (
@@ -246,7 +270,6 @@ function LoginForm() {
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
               >
-                {/* Sweep glow effect */}
                 <motion.div
                   className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
                   initial={{ x: "-100%" }}
@@ -271,6 +294,34 @@ function LoginForm() {
                   )}
                 </span>
               </motion.button>
+            </motion.div>
+
+            {/* Divider */}
+            <motion.div
+              className="flex items-center gap-3"
+              initial={{ opacity: 0 }}
+              animate={isReady ? { opacity: 1 } : {}}
+              transition={{ delay: 0.7 }}
+            >
+              <div className="flex-1 h-px bg-[#1c1c2e]" />
+              <span className="text-[10px] text-[#857F75]/40 uppercase tracking-wider">or</span>
+              <div className="flex-1 h-px bg-[#1c1c2e]" />
+            </motion.div>
+
+            {/* Google Sign-In */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={isReady ? { opacity: 1, y: 0 } : {}}
+              transition={{ delay: 0.8 }}
+            >
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="w-full py-3 rounded-lg bg-[#141420] border border-[#1c1c2e] text-[#F2EFE9] text-sm font-medium flex items-center justify-center gap-2 hover:bg-[#1c1c2e] transition-colors"
+              >
+                <Chrome className="w-4 h-4" />
+                Sign in with Google
+              </button>
             </motion.div>
           </form>
         </motion.div>

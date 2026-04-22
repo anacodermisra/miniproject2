@@ -1,13 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useStressStream } from "@/hooks/use-stress-stream";
+import { useFeatureCollector } from "@/hooks/use-feature-collector";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { BreathingReset } from "@/components/breathing-reset";
 import type { UserStats, InterventionRecommendation, StressResult } from "@/lib/types";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, Area, AreaChart
+} from "recharts";
 
 const SOFT_LEVEL: Record<string, string> = {
   STRESSED: "High Stress",
@@ -20,9 +25,92 @@ function energyFromStress(score: number) {
   return score;
 }
 
-// ─── SVG Semi-circle Gauge ───
-function StressGauge({ score, level }: { score: number; level: string }) {
-  const stress = score;
+// ─── Mini Gauge Component ───
+function MiniGauge({
+  value,
+  maxValue,
+  label,
+  unit,
+  color,
+  warnColor,
+  warnThreshold,
+}: {
+  value: number;
+  maxValue: number;
+  label: string;
+  unit: string;
+  color: string;
+  warnColor?: string;
+  warnThreshold?: number;
+}) {
+  const fraction = Math.max(0, Math.min(1, value / maxValue));
+  const isWarn = warnThreshold !== undefined && value > warnThreshold;
+  const activeColor = isWarn && warnColor ? warnColor : color;
+
+  const arcR = 40;
+  const cx = 55;
+  const cy = 50;
+  const totalArc = Math.PI * arcR;
+  const dashOffset = totalArc * (1 - fraction);
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="110" height="75" viewBox="0 0 110 75">
+        <defs>
+          <linearGradient id={`gauge-${label}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.6" />
+            <stop offset="100%" stopColor={activeColor} />
+          </linearGradient>
+        </defs>
+        <path
+          d={`M ${cx - arcR} ${cy} A ${arcR} ${arcR} 0 0 1 ${cx + arcR} ${cy}`}
+          fill="none"
+          stroke="#1c1c2e"
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+        <path
+          d={`M ${cx - arcR} ${cy} A ${arcR} ${arcR} 0 0 1 ${cx + arcR} ${cy}`}
+          fill="none"
+          stroke={`url(#gauge-${label})`}
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={totalArc}
+          strokeDashoffset={dashOffset}
+          style={{ transition: "stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)" }}
+        />
+        <text
+          x={cx}
+          y={cy - 8}
+          textAnchor="middle"
+          fill="#F2EFE9"
+          fontSize="18"
+          fontWeight="700"
+          fontFamily="system-ui, sans-serif"
+        >
+          {value > 0 ? (unit === "WPM" ? Math.round(value) : value.toFixed(1)) : "--"}
+        </text>
+        <text
+          x={cx}
+          y={cy + 6}
+          textAnchor="middle"
+          fill="#857F75"
+          fontSize="8"
+          fontFamily="system-ui, sans-serif"
+        >
+          / {maxValue}{unit ? ` ${unit}` : ""}
+        </text>
+      </svg>
+      <span className="text-[10px] uppercase tracking-wider mt-1" style={{ color: "#857F75" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ─── SVG Semi-circle Gauge (Energy) ───
+function EnergyGauge({ score, level }: { score: number; level: string }) {
+  const energy = energyFromStress(score);
   const softLevel = SOFT_LEVEL[level] ?? level;
 
   const gradientId =
@@ -35,11 +123,8 @@ function StressGauge({ score, level }: { score: number; level: string }) {
   const arcR = 90;
   const cx = 130;
   const cy = 120;
-  const startAngle = Math.PI;
-  const endAngle = 0;
   const totalArc = Math.PI * arcR;
-
-  const fraction = Math.max(0, Math.min(1, stress / 100));
+  const fraction = Math.max(0, Math.min(1, energy / 100));
   const dashOffset = totalArc * (1 - fraction);
 
   return (
@@ -86,14 +171,7 @@ function StressGauge({ score, level }: { score: number; level: string }) {
             transition:
               "stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s ease",
           }}
-        >
-          <animate
-            attributeName="stroke-dashoffset"
-            values={`${dashOffset - 4};${dashOffset + 4};${dashOffset - 4}`}
-            dur="3s"
-            repeatCount="indefinite"
-          />
-        </path>
+        />
         <text
           x={cx}
           y={cy - 18}
@@ -101,7 +179,7 @@ function StressGauge({ score, level }: { score: number; level: string }) {
           fill="#F2EFE9"
           fontSize="44"
           fontWeight="700"
-          fontFamily="Geist, system-ui, sans-serif"
+          fontFamily="system-ui, sans-serif"
         >
           {Math.round(stress)}
         </text>
@@ -111,7 +189,7 @@ function StressGauge({ score, level }: { score: number; level: string }) {
           textAnchor="middle"
           fill="#857F75"
           fontSize="12"
-          fontFamily="Geist, system-ui, sans-serif"
+          fontFamily="system-ui, sans-serif"
         >
           / 100
         </text>
@@ -146,7 +224,7 @@ function Metric({
   warn?: boolean;
 }) {
   return (
-    <div className="rounded-lg border p-4 transition-all duration-200 hover:shadow-[0_0_16px_rgba(91,79,196,0.12)] whimsy-glow"
+    <div className="rounded-lg border p-4 transition-all duration-200 hover:shadow-[0_0_16px_rgba(91,79,196,0.12)]"
       style={{ background: "#141420", borderColor: "#1c1c2e" }}
     >
       <div
@@ -261,9 +339,21 @@ export default function TrackingPage() {
   const CRITICAL_STRESS_SCORE = 85;
   const MIN_CONFIDENCE_FOR_CRITICAL_ALERT = 0.7;
   const { userId } = useAuth();
-  const { data: wsData, history: wsHistory, status, error: wsError } = useStressStream();
+  const { data: wsData, history: wsHistory, status, error: wsError, wsRef } = useStressStream();
+
+  const wsSend = useCallback(
+    (data: string) => {
+      if (wsRef?.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(data);
+      }
+    },
+    [wsRef],
+  );
+
+  useFeatureCollector(wsSend, userId, 30000);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [polledData, setPolledData] = useState<StressResult | null>(null);
+  const [trendData, setTrendData] = useState<any[]>([]);
   const prevLevelRef = useRef<string>("UNKNOWN");
   const notifPermissionRef = useRef<boolean>(false);
   const stressStreakRef = useRef<number>(0);
@@ -307,6 +397,41 @@ export default function TrackingPage() {
     return () => clearInterval(interval);
   }, [userId]);
 
+  // Load 21-day trend data
+  useEffect(() => {
+    const fetchTrend = async () => {
+      try {
+        const history = await api.history(userId, 504); // 21 days * 24 hours
+        if (history.length > 0) {
+          // Aggregate into daily averages
+          const dailyMap = new Map<string, { score: number; count: number; wpm: number; errors: number; energy: number }>();
+          history.forEach((h) => {
+            const day = new Date(h.timestamp).toLocaleDateString([], { month: "short", day: "numeric" });
+            const existing = dailyMap.get(day) || { score: 0, count: 0, wpm: 0, errors: 0, energy: 0 };
+            dailyMap.set(day, {
+              score: existing.score + h.score,
+              count: existing.count + 1,
+              wpm: existing.wpm + (h.typing_speed_wpm || 0),
+              errors: existing.errors + (h.error_rate || 0),
+              energy: existing.energy + (100 - h.score),
+            });
+          });
+          const trend = Array.from(dailyMap.entries())
+            .slice(-21)
+            .map(([day, vals]) => ({
+              day,
+              stress: Math.round(vals.score / vals.count),
+              energy: Math.round(vals.energy / vals.count),
+              wpm: Math.round(vals.wpm / vals.count),
+              errors: parseFloat((vals.errors / vals.count * 100).toFixed(1)),
+            }));
+          setTrendData(trend);
+        }
+      } catch {}
+    };
+    fetchTrend();
+  }, [userId]);
+
   useEffect(() => {
     const pollLatest = async () => {
       try {
@@ -323,13 +448,13 @@ export default function TrackingPage() {
                 feature_contributions: {},
                 insights: latest.insights,
                 timestamp: latest.timestamp,
-                typing_speed_wpm: 0,
-                rage_click_count: 0,
-                error_rate: 0,
-                click_count: 0,
-                mouse_speed_mean: 0,
-                mouse_reentry_count: 0,
-                mouse_reentry_latency_ms: 0,
+                typing_speed_wpm: latest.typing_speed_wpm || 0,
+                rage_click_count: latest.rage_click_count || 0,
+                error_rate: latest.error_rate || 0,
+                click_count: latest.click_count || 0,
+                mouse_speed_mean: latest.mouse_speed_mean || 0,
+                mouse_reentry_count: latest.mouse_reentry_count || 0,
+                mouse_reentry_latency_ms: latest.mouse_reentry_latency_ms || 0,
                 alert_state: "NORMAL" as const,
                 intervention: null,
                 trend: "steady" as const,
@@ -418,6 +543,8 @@ export default function TrackingPage() {
   const liveWpm = data?.typing_speed_wpm ?? 0;
   const liveRageClicks = data?.rage_click_count ?? 0;
   const liveErrorRate = data?.error_rate ?? 0;
+  const liveClicks = data?.click_count ?? 0;
+  const liveMouseSpeed = data?.mouse_speed_mean ?? 0;
 
   const formatBreakTimer = (total: number) => {
     const m = String(Math.floor(total / 60)).padStart(2, "0");
@@ -541,13 +668,8 @@ export default function TrackingPage() {
                   <button
                     key={idx}
                     onClick={() => {
-                      if (action.action === "acknowledge") {
-                        setWindDownDismissed(true);
-                        setWindDown(null);
-                      } else {
-                        setWindDownDismissed(true);
-                        setWindDown(null);
-                      }
+                      setWindDownDismissed(true);
+                      setWindDown(null);
                     }}
                     className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"
                     style={{
@@ -647,71 +769,13 @@ export default function TrackingPage() {
               >
                 I&apos;m okay, thanks
               </button>
-              <button
-                onClick={() =>
-                  api.interventionAction(
-                    "need_stronger_help",
-                    userId,
-                    intervention.intervention_type,
-                  )
-                }
-                className="px-4 py-2 rounded-lg border text-xs font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"
-                style={{ borderColor: "#dc26264d", color: "#dc2626" }}
-              >
-                Need different help
-              </button>
             </div>
-            {breakSeconds === 0 && activeIntervention && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  onClick={async () => {
-                    await api.interventionAction(
-                      "helped",
-                      userId,
-                      intervention.intervention_type,
-                    );
-                    setActiveIntervention(null);
-                  }}
-                  className="px-4 py-2 rounded-lg border text-xs font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"
-                  style={{ borderColor: "#22c55e4d", color: "#22c55e" }}
-                >
-                  That helped ✨
-                </button>
-                <button
-                  onClick={async () => {
-                    await api.interventionAction(
-                      "not_helped",
-                      userId,
-                      intervention.intervention_type,
-                    );
-                    setActiveIntervention(null);
-                  }}
-                  className="px-4 py-2 rounded-lg border text-xs font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"
-                  style={{ borderColor: "#dc26264d", color: "#dc2626" }}
-                >
-                  Still feeling it
-                </button>
-                <button
-                  onClick={async () => {
-                    await api.interventionAction(
-                      "skipped",
-                      userId,
-                      intervention.intervention_type,
-                    );
-                    setActiveIntervention(null);
-                  }}
-                  className="px-4 py-2 rounded-lg border text-xs font-medium transition-all duration-200 hover:scale-[0.98] active:scale-[0.96]"
-                  style={{ borderColor: "#1c1c2e", color: "#857F75" }}
-                >
-                  Not right now
-                </button>
-              </div>
-            )}
           </div>
         )}
 
-      {/* Gauge + Stats Row */}
+      {/* ─── Main Gauge + Mini Gauges ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Energy Gauge */}
         <div
           className="lg:col-span-1 flex flex-col items-center justify-center rounded-lg border p-6"
           style={{ background: "#141420", borderColor: "#1c1c2e" }}
@@ -719,43 +783,89 @@ export default function TrackingPage() {
           <StressGauge score={score} level={level} />
         </div>
 
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Metric
-            label="Typing Speed"
-            value={
-              liveWpm > 0
-                ? liveWpm.toFixed(0)
-                : (stats?.typing_speed_wpm?.toFixed(0) ?? "--")
-            }
-            unit="WPM"
-          />
-          <Metric
-            label="Quick clicks"
-            value={liveRageClicks > 0 ? liveRageClicks : (stats?.rage_click_count ?? 0)}
-            warn={liveRageClicks > 2}
-          />
-          <Metric
-            label="Error Rate"
-            value={
-              liveErrorRate > 0
-                ? `${(liveErrorRate * 100).toFixed(1)}`
-                : stats?.error_rate
-                  ? `${(stats.error_rate * 100).toFixed(1)}`
-                  : "0"
-            }
-            unit="%"
-            warn={liveErrorRate > 0.15}
-          />
-          <Metric
-            label="Stress spikes"
-            value={stats?.stressed_pct ?? 0}
-            unit="%"
-            warn={(stats?.stressed_pct ?? 0) > 30}
-          />
+        {/* Mini Gauges: WPM, Error Rate, Clicks, Mouse Speed */}
+        <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="rounded-lg border p-4 flex flex-col items-center justify-center"
+            style={{ background: "#141420", borderColor: "#1c1c2e" }}>
+            <MiniGauge
+              value={liveWpm > 0 ? liveWpm : stats?.typing_speed_wpm || 0}
+              maxValue={120}
+              label="Typing Speed"
+              unit="WPM"
+              color="#5b4fc4"
+            />
+          </div>
+          <div className="rounded-lg border p-4 flex flex-col items-center justify-center"
+            style={{ background: "#141420", borderColor: "#1c1c2e" }}>
+            <MiniGauge
+              value={liveErrorRate > 0 ? liveErrorRate * 100 : stats?.error_rate ? stats.error_rate * 100 : 0}
+              maxValue={30}
+              label="Error Rate"
+              unit="%"
+              color="#22c55e"
+              warnColor="#dc2626"
+              warnThreshold={15}
+            />
+          </div>
+          <div className="rounded-lg border p-4 flex flex-col items-center justify-center"
+            style={{ background: "#141420", borderColor: "#1c1c2e" }}>
+            <MiniGauge
+              value={liveRageClicks > 0 ? liveRageClicks : stats?.rage_click_count || 0}
+              maxValue={10}
+              label="Rage Clicks"
+              unit=""
+              color="#d97706"
+              warnColor="#dc2626"
+              warnThreshold={3}
+            />
+          </div>
+          <div className="rounded-lg border p-4 flex flex-col items-center justify-center"
+            style={{ background: "#141420", borderColor: "#1c1c2e" }}>
+            <MiniGauge
+              value={liveMouseSpeed > 0 ? liveMouseSpeed : stats?.mouse_speed_mean || 0}
+              maxValue={500}
+              label="Mouse Speed"
+              unit="px/s"
+              color="#3b82f6"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Stress Trend Sparkline */}
+      {/* ─── 21-Day Trend Chart ─── */}
+      {trendData.length > 1 && (
+        <div
+          className="rounded-lg border p-5"
+          style={{ background: "#141420", borderColor: "#1c1c2e" }}
+        >
+          <h3 className="text-sm mb-4 font-medium" style={{ color: "#F2EFE9" }}>
+            21-Day Trends
+          </h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1c1c2e" />
+              <XAxis dataKey="day" stroke="#857F75" fontSize={10} tick={{ fill: "#857F75" }} />
+              <YAxis stroke="#857F75" fontSize={10} tick={{ fill: "#857F75" }} domain={[0, 100]} />
+              <Tooltip
+                contentStyle={{
+                  background: "#141420",
+                  border: "1px solid #1c1c2e",
+                  borderRadius: "8px",
+                  color: "#F2EFE9",
+                  fontSize: "12px",
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: "11px" }} />
+              <Line type="monotone" dataKey="energy" stroke="#22c55e" strokeWidth={2} dot={false} name="Energy" />
+              <Line type="monotone" dataKey="stress" stroke="#dc2626" strokeWidth={2} dot={false} name="Stress" />
+              <Line type="monotone" dataKey="wpm" stroke="#5b4fc4" strokeWidth={2} dot={false} name="WPM" yAxisId="right" />
+              <YAxis yAxisId="right" orientation="right" stroke="#5b4fc4" fontSize={10} tick={{ fill: "#5b4fc4" }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* ─── Energy Trend Sparkline (last 30 min) ─── */}
       <div
         className="rounded-lg border p-5"
         style={{ background: "#141420", borderColor: "#1c1c2e" }}
@@ -807,7 +917,7 @@ export default function TrackingPage() {
         )}
       </div>
 
-      {/* Insights + Recommendation */}
+      {/* ─── Insights + Recommendation ─── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Insights insights={insights} level={level} />
         <div className="space-y-4">
@@ -833,7 +943,7 @@ export default function TrackingPage() {
         </div>
       </div>
 
-      {/* Feedback */}
+      {/* ─── Feedback ─── */}
       <div
         className="rounded-lg border p-5"
         style={{ background: "#141420", borderColor: "#1c1c2e" }}

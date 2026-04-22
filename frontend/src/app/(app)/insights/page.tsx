@@ -232,6 +232,209 @@ function BreakEffectivenessChart({
   );
 }
 
+// ─── Energy Distribution ───
+function EnergyDistributionChart({
+  data,
+}: {
+  data: { bucket: string; count: number; percentage: number }[];
+}) {
+  const hasData = data.some((d) => d.count > 0);
+
+  if (!hasData) {
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Zap size={18} style={{ color: "#5b4fc4" }} />
+          <h3 className="text-lg font-medium" style={{ color: "#F2EFE9" }}>
+            Energy distribution
+          </h3>
+        </div>
+        <div className="h-[200px] flex items-center justify-center">
+          <p className="text-sm" style={{ color: "#857F75" }}>
+            Keep using MindPulse — your energy breakdown will appear here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <Zap size={18} style={{ color: "#5b4fc4" }} />
+        <h3 className="text-lg font-medium" style={{ color: "#F2EFE9" }}>
+          Energy distribution
+        </h3>
+      </div>
+      <p className="text-sm mb-4" style={{ color: "#857F75" }}>
+        How often you land in each energy bucket
+      </p>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#1c1c2e" />
+          <XAxis dataKey="bucket" stroke="#857F75" fontSize={12} />
+          <YAxis stroke="#857F75" fontSize={12} />
+          <Tooltip
+            contentStyle={{
+              background: "#141420",
+              border: "1px solid #1c1c2e",
+              borderRadius: "8px",
+              color: "#F2EFE9",
+            }}
+            formatter={(value: number) => `${value}%`}
+          />
+          <Bar dataKey="percentage" radius={[4, 4, 0, 0]}>
+            {data.map((entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={
+                  entry.bucket === "High"
+                    ? "#22c55e"
+                    : entry.bucket === "Medium"
+                      ? "#d97706"
+                      : "#dc2626"
+                }
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="flex gap-6 mt-3">
+        {data.map((d, i) => (
+          <div key={i} className="flex items-center gap-2 text-sm">
+            <span
+              className="w-3 h-3 rounded-full inline-block"
+              style={{
+                background:
+                  d.bucket === "High"
+                    ? "#22c55e"
+                    : d.bucket === "Medium"
+                      ? "#d97706"
+                      : "#dc2626",
+              }}
+            />
+            <span style={{ color: "#857F75" }}>
+              {d.bucket}: {d.percentage}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Correlation Matrix Heatmap ───
+function CorrelationMatrixHeatmap({
+  metrics,
+  correlations,
+}: {
+  metrics: string[];
+  correlations: number[][];
+}) {
+  const hasData = correlations.some((row) => row.some((v) => !isNaN(v) && v !== 0));
+
+  function getCellColor(value: number | null) {
+    if (value === null || isNaN(value)) return "#2a2a3d";
+    if (value > 0) {
+      const intensity = Math.min(Math.round(value * 120), 200);
+      return `rgb(34, ${100 + intensity}, 94)`;
+    }
+    if (value < 0) {
+      const intensity = Math.min(Math.round(Math.abs(value) * 120), 200);
+      return `rgb(${180 + intensity}, 60, 60)`;
+    }
+    return "#2a2a3d";
+  }
+
+  function getTextColor(value: number | null) {
+    if (value === null || isNaN(value)) return "#857F75";
+    return "#F2EFE9";
+  }
+
+  if (!hasData) {
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp size={18} style={{ color: "#5b4fc4" }} />
+          <h3 className="text-lg font-medium" style={{ color: "#F2EFE9" }}>
+            Metric correlations
+          </h3>
+        </div>
+        <div className="h-[250px] flex items-center justify-center">
+          <p className="text-sm" style={{ color: "#857F75" }}>
+            More data needed — correlations will appear after a few days of tracking.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp size={18} style={{ color: "#5b4fc4" }} />
+        <h3 className="text-lg font-medium" style={{ color: "#F2EFE9" }}>
+          Metric correlations
+        </h3>
+      </div>
+      <p className="text-sm mb-4" style={{ color: "#857F75" }}>
+        How your metrics move together
+      </p>
+      <div className="overflow-x-auto">
+        <div
+          className="inline-grid gap-1"
+          style={{ gridTemplateColumns: `auto repeat(${metrics.length}, 1fr)` }}
+        >
+          {/* Header row */}
+          <div />
+          {metrics.map((m, i) => (
+            <div
+              key={`h-${i}`}
+              className="text-xs text-center px-2 py-1"
+              style={{ color: "#857F75", fontWeight: 500 }}
+            >
+              {m}
+            </div>
+          ))}
+          {/* Data rows */}
+          {metrics.map((rowLabel, ri) => (
+            <div key={`row-${ri}`} className="contents">
+              <div
+                className="text-xs px-2 py-2 flex items-center"
+                style={{ color: "#857F75", fontWeight: 500 }}
+              >
+                {rowLabel}
+              </div>
+              {correlations[ri].map((val, ci) => (
+                <div
+                  key={`c-${ri}-${ci}`}
+                  className="text-xs text-center px-2 py-2 rounded"
+                  style={{
+                    background: getCellColor(val),
+                    color: getTextColor(val),
+                    minWidth: "64px",
+                  }}
+                >
+                  {val !== null && !isNaN(val) ? val.toFixed(2) : "—"}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-4 mt-4">
+        <span className="text-xs" style={{ color: "#857F75" }}>
+          Negative
+        </span>
+        <div className="flex-1 h-2 rounded" style={{ background: "linear-gradient(to right, rgb(255, 60, 60), #2a2a3d, rgb(34, 220, 94))" }} />
+        <span className="text-xs" style={{ color: "#857F75" }}>
+          Positive
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Weekly Wins ───
 function WeeklyWins({ stats }: { stats: { goodDays: number; breaksHelped: number; streak: number } }) {
   const badges = [
@@ -280,6 +483,13 @@ export default function InsightsPage() {
     breaksHelped: 0,
     streak: 0,
   });
+  const [energyDistribution, setEnergyDistribution] = useState<
+    { bucket: string; count: number; percentage: number }[]
+  >([]);
+  const [correlationData, setCorrelationData] = useState<{
+    metrics: string[];
+    correlations: number[][];
+  }>({ metrics: [], correlations: [] });
 
   useEffect(() => {
     const fetchInsights = async () => {
@@ -388,6 +598,72 @@ export default function InsightsPage() {
         }
 
         setWeeklyStats({ goodDays, breaksHelped, streak });
+
+        // Calculate energy distribution
+        const totalEntries = history.length;
+        let lowCount = 0;
+        let medCount = 0;
+        let highCount = 0;
+        history.forEach((entry) => {
+          const energy = 100 - entry.score;
+          if (energy <= 33) lowCount++;
+          else if (energy <= 66) medCount++;
+          else highCount++;
+        });
+        setEnergyDistribution([
+          { bucket: "Low", count: lowCount, percentage: totalEntries > 0 ? Math.round((lowCount / totalEntries) * 100) : 0 },
+          { bucket: "Medium", count: medCount, percentage: totalEntries > 0 ? Math.round((medCount / totalEntries) * 100) : 0 },
+          { bucket: "High", count: highCount, percentage: totalEntries > 0 ? Math.round((highCount / totalEntries) * 100) : 0 },
+        ]);
+
+        // Calculate correlation matrix
+        const metricKeys = [
+          { label: "Energy", getValue: (e: any) => 100 - e.score },
+          { label: "WPM", getValue: (e: any) => e.typing_speed_wpm },
+          { label: "Error Rate", getValue: (e: any) => e.error_rate },
+          { label: "Rage Clicks", getValue: (e: any) => e.rage_click_count },
+          { label: "Mouse Speed", getValue: (e: any) => e.mouse_speed_mean },
+        ];
+
+        function pearson(x: number[], y: number[]): number | null {
+          const n = x.length;
+          if (n < 2) return null;
+          const meanX = x.reduce((a, b) => a + b, 0) / n;
+          const meanY = y.reduce((a, b) => a + b, 0) / n;
+          let num = 0, denX = 0, denY = 0;
+          for (let i = 0; i < n; i++) {
+            const dx = x[i] - meanX;
+            const dy = y[i] - meanY;
+            num += dx * dy;
+            denX += dx * dx;
+            denY += dy * dy;
+          }
+          const den = Math.sqrt(denX * denY);
+          if (den === 0) return null;
+          return num / den;
+        }
+
+        const series = metricKeys.map((m) =>
+          history.map((e) => m.getValue(e)).filter((v) => v !== null && !isNaN(v))
+        );
+
+        // Align lengths by using minimum length
+        const minLen = Math.min(...series.map((s) => s.length));
+        const aligned = series.map((s) => s.slice(0, minLen));
+
+        const corrMatrix: number[][] = [];
+        for (let i = 0; i < aligned.length; i++) {
+          const row: number[] = [];
+          for (let j = 0; j < aligned.length; j++) {
+            row.push(i === j ? 1 : pearson(aligned[i], aligned[j]) ?? 0);
+          }
+          corrMatrix.push(row);
+        }
+
+        setCorrelationData({
+          metrics: metricKeys.map((m) => m.label),
+          correlations: corrMatrix,
+        });
       } catch (error) {
         console.error("Failed to fetch insights:", error);
       } finally {
@@ -439,6 +715,16 @@ export default function InsightsPage() {
       {/* Break Effectiveness */}
       <div className="rounded-lg p-6" style={{ background: "#141420", border: "1px solid #1c1c2e" }}>
         <BreakEffectivenessChart data={breakEffectiveness} />
+      </div>
+
+      {/* Energy Distribution */}
+      <div className="rounded-lg p-6" style={{ background: "#141420", border: "1px solid #1c1c2e" }}>
+        <EnergyDistributionChart data={energyDistribution} />
+      </div>
+
+      {/* Correlation Matrix */}
+      <div className="rounded-lg p-6" style={{ background: "#141420", border: "1px solid #1c1c2e" }}>
+        <CorrelationMatrixHeatmap metrics={correlationData.metrics} correlations={correlationData.correlations} />
       </div>
     </div>
   );
